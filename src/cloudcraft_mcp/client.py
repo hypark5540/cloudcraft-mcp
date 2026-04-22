@@ -7,9 +7,9 @@ CLI, etc.).
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, cast
+from collections.abc import Mapping
 
-import httpx
 
 __all__ = ["CloudcraftClient", "CloudcraftError"]
 
@@ -77,31 +77,55 @@ class CloudcraftClient:
             )
         return response
 
+    async def _request_json(
+        self,
+        method: str,
+        path: str,
+        *,
+        params: dict[str, Any] | None = None,
+        json: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        response = await self._request(method, path, params=params, json=json)
+        try:
+            data = response.json()
+        except ValueError as exc:
+            raise CloudcraftError(
+                status=response.status_code,
+                body=f"invalid JSON body: {exc}",
+                method=method,
+                url=f"{self._base_url}{path}",
+            ) from exc
+        if not isinstance(data, dict):
+            raise CloudcraftError(
+                status=response.status_code,
+                body=f"expected JSON object, got {type(data).__name__}",
+                method=method,
+                url=f"{self._base_url}{path}",
+            )
+        return cast(dict[str, Any], data)
+
     # ---- user ---------------------------------------------------------------
     async def whoami(self) -> dict[str, Any]:
-        response = await self._request("GET", "/user/me")
-        return response.json()
+        return await self._request_json("GET", "/user/me")
 
     # ---- blueprints ---------------------------------------------------------
     async def list_blueprints(self) -> dict[str, Any]:
-        response = await self._request("GET", "/blueprint")
-        return response.json()
+        return await self._request_json("GET", "/blueprint")
 
     async def get_blueprint(self, blueprint_id: str) -> dict[str, Any]:
-        response = await self._request("GET", f"/blueprint/{blueprint_id}")
-        return response.json()
+        return await self._request_json("GET", f"/blueprint/{blueprint_id}")
 
-    async def create_blueprint(self, data: dict[str, Any]) -> dict[str, Any]:
-        response = await self._request("POST", "/blueprint", json={"data": data})
-        return response.json()
+    async def create_blueprint(self, data: Mapping[str, Any]) -> dict[str, Any]:
+        return await self._request_json(
+            "POST", "/blueprint", json={"data": dict(data)}
+        )
 
     async def update_blueprint(
-        self, blueprint_id: str, data: dict[str, Any]
+        self, blueprint_id: str, data: Mapping[str, Any]
     ) -> dict[str, Any]:
-        response = await self._request(
-            "PUT", f"/blueprint/{blueprint_id}", json={"data": data}
+        return await self._request_json(
+            "PUT", f"/blueprint/{blueprint_id}", json={"data": dict(data)}
         )
-        return response.json()
 
     async def delete_blueprint(self, blueprint_id: str) -> None:
         await self._request("DELETE", f"/blueprint/{blueprint_id}")
@@ -128,13 +152,11 @@ class CloudcraftClient:
 
     # ---- aws live-scan ------------------------------------------------------
     async def list_aws_accounts(self) -> dict[str, Any]:
-        response = await self._request("GET", "/aws/account")
-        return response.json()
+        return await self._request_json("GET", "/aws/account")
 
     async def snapshot_aws(
         self, account_id: str, region: str, service: str
     ) -> dict[str, Any]:
-        response = await self._request(
+        return await self._request_json(
             "GET", f"/aws/account/{account_id}/snapshot/{region}/{service}"
         )
-        return response.json()
