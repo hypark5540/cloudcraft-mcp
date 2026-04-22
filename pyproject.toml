@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "cloudcraft-mcp"
-version = "0.1.1"
+version = "0.1.2"
 description = "Model Context Protocol (MCP) server for Cloudcraft.co — list, read, export, create, update, and delete cloud architecture blueprints from Claude Desktop and other MCP clients."
 readme = "README.md"
 license = { text = "MIT" }

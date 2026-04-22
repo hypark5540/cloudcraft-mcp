@@ -4,6 +4,21 @@ All notable changes to this project are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.2] - 2026-04-22
+
+### Fixed
+- Restored missing ``import httpx`` in ``client.py`` — prior 0.1.1 candidate
+  would have failed at import time on every install (build succeeded but
+  runtime ``NameError`` on ``httpx.Timeout``).
+- Corrected ``tests/test_server_startup.py`` regression guard: the old
+  ``__mro_entries__`` check raised ``AttributeError`` on completed TypedDict
+  classes. Replaced with a direct ``pydantic.TypeAdapter(BlueprintData)``
+  probe that reproduces the exact FastMCP tool-registration codepath.
+
+### Changed
+- Synchronised ``cloudcraft_mcp.__version__`` with ``pyproject.toml``.
+- Bumped ``astral-sh/setup-uv`` to ``@v5`` in ``publish.yml`` (matches CI).
+
 ## [0.1.1] - 2026-04-22
 
 ### Added
@@ -50,5 +65,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `cloudcraft-mcp` console script entry point.
 - Project metadata, MIT license, and CI workflow.
 
+[0.1.2]: https://github.com/hypark5540/cloudcraft-mcp/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/hypark5540/cloudcraft-mcp/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/hypark5540/cloudcraft-mcp/releases/tag/v0.1.0
