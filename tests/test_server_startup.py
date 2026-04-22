@@ -10,7 +10,6 @@ import on 3.10 / 3.11 CI runners and this test will surface the regression.
 from __future__ import annotations
 
 import importlib
-import os
 
 import pytest
 
@@ -32,18 +31,22 @@ def test_server_module_imports(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.mark.unit
-def test_blueprintdata_is_typing_extensions_variant() -> None:
-    """Guard the specific import that pydantic cares about on Python < 3.12."""
-    from typing_extensions import TypedDict as TypedDictExt
+def test_blueprintdata_is_pydantic_introspectable() -> None:
+    """Guard against flipping ``BlueprintData`` back to ``typing.TypedDict``.
+
+    On Python < 3.12, pydantic raises ``PydanticUserError`` (code
+    ``typed-dict-version``) for stdlib ``typing.TypedDict``. ``typing_extensions``
+    variant is always accepted. The most reliable runtime check is to ask
+    pydantic to build a schema — this exactly reproduces the FastMCP tool
+    registration path where the regression would bite.
+    """
+    from pydantic import TypeAdapter
 
     from cloudcraft_mcp.types import BlueprintData
 
-    # BlueprintData is built with TypedDict() metaclass; the sentinel attribute
-    # ``__orig_bases__`` distinguishes the typing_extensions variant at runtime.
-    assert TypedDictExt in BlueprintData.__mro_entries__((TypedDictExt,)) or hasattr(
-        BlueprintData, "__required_keys__"
-    ), "BlueprintData must be a TypedDict"
+    # TypedDict hallmark (sanity)
+    assert hasattr(BlueprintData, "__required_keys__"), "BlueprintData must be a TypedDict"
 
-    # The failure mode we're guarding against: pydantic sees ``typing.TypedDict``
-    # and raises PydanticUserError. Reproducing the pydantic check directly:
-    assert os.environ  # (placeholder — the real guard is the import above succeeding)
+    # Real guard: pydantic must accept it. Would raise PydanticUserError on
+    # Python < 3.12 if BlueprintData were stdlib typing.TypedDict.
+    TypeAdapter(BlueprintData)

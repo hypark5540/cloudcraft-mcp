@@ -7,9 +7,10 @@ CLI, etc.).
 from __future__ import annotations
 
 import logging
-from typing import Any, cast
 from collections.abc import Mapping
+from typing import Any, cast
 
+import httpx
 
 __all__ = ["CloudcraftClient", "CloudcraftError"]
 
