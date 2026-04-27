@@ -84,7 +84,7 @@ jobs:
         uses: schneegans/dynamic-badges-action@v1.7.0
         with:
           auth: ${{ secrets.GIST_SECRET }}
-          gistID: 579e63da8d9e90f2761c3ab06c18e08d
+          gistID: 45318b91ace50c064a365dd751f6363b
           filename: cloudcraft-mcp-tests.json
           label: tests
           message: "${{ steps.test-counts.outputs.passed }} passed"
