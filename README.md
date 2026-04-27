@@ -1,7 +1,7 @@
 # cloudcraft-mcp
 
 [![CI](https://github.com/hypark5540/cloudcraft-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/hypark5540/cloudcraft-mcp/actions/workflows/ci.yml)
-[![tests](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/hypark5540/45318b91ace50c064a365dd751f6363b/raw/cloudcraft-mcp-tests.json)](https://github.com/hypark5540/cloudcraft-mcp/actions/workflows/ci.yml)
+[![tests](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/hypark5540/6221ea4591f028c8bac9b8845b416170/raw/cloudcraft-mcp-tests.json)](https://github.com/hypark5540/cloudcraft-mcp/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/hypark5540/cloudcraft-mcp/branch/main/graph/badge.svg)](https://codecov.io/gh/hypark5540/cloudcraft-mcp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
