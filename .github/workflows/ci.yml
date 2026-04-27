@@ -34,7 +34,12 @@ jobs:
         run: uv run mypy src
 
       - name: Run tests
-        run: uv run pytest -v --cov=cloudcraft_mcp --cov-report=term-missing --cov-report=xml
+        run: |
+          uv run pytest -v \
+            --cov=cloudcraft_mcp \
+            --cov-report=term-missing \
+            --cov-report=xml \
+            --junitxml=junit.xml
 
       # Upload coverage from a single matrix cell so Codecov isn't hit four
       # times with identical reports. Python 3.12 is the canonical uploader.
@@ -50,3 +55,37 @@ jobs:
           # made private, add CODECOV_TOKEN as a repo secret and pass it here.
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+      # Pull pass/fail counts out of the JUnit XML so the dynamic badge can
+      # show "N passed" on README. Only runs on main pushes from the canonical
+      # matrix cell so PR runs don't churn the gist.
+      - name: Extract test counts
+        if: matrix.python-version == '3.12' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        id: test-counts
+        run: |
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import xml.etree.ElementTree as ET
+          root = ET.parse("junit.xml").getroot()
+          # pytest emits a single <testsuite> wrapped in <testsuites>; both shapes work.
+          suite = root if root.tag == "testsuite" else root.find("testsuite")
+          tests = int(suite.get("tests", 0))
+          failures = int(suite.get("failures", 0))
+          errors = int(suite.get("errors", 0))
+          skipped = int(suite.get("skipped", 0))
+          passed = tests - failures - errors - skipped
+          color = "brightgreen" if (failures + errors) == 0 else "red"
+          print(f"passed={passed}")
+          print(f"total={tests}")
+          print(f"color={color}")
+          PY
+
+      - name: Update tests badge gist
+        if: matrix.python-version == '3.12' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: schneegans/dynamic-badges-action@v1.7.0
+        with:
+          auth: ${{ secrets.GIST_SECRET }}
+          gistID: 579e63da8d9e90f2761c3ab06c18e08d
+          filename: cloudcraft-mcp-tests.json
+          label: tests
+          message: "${{ steps.test-counts.outputs.passed }} passed"
+          color: ${{ steps.test-counts.outputs.color }}
