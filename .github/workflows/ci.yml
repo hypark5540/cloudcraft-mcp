@@ -34,4 +34,19 @@ jobs:
         run: uv run mypy src
 
       - name: Run tests
-        run: uv run pytest -v --cov=cloudcraft_mcp --cov-report=term-missing
+        run: uv run pytest -v --cov=cloudcraft_mcp --cov-report=term-missing --cov-report=xml
+
+      # Upload coverage from a single matrix cell so Codecov isn't hit four
+      # times with identical reports. Python 3.12 is the canonical uploader.
+      - name: Upload coverage to Codecov
+        if: matrix.python-version == '3.12'
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./coverage.xml
+          flags: unittests
+          name: codecov-cloudcraft-mcp
+          fail_ci_if_error: true
+          # Public repo — OIDC-based tokenless upload. If the repo is later
+          # made private, add CODECOV_TOKEN as a repo secret and pass it here.
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}

@@ -4,6 +4,52 @@ All notable changes to this project are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.3] - 2026-04-23
+
+### Security
+- **Path-traversal hardening in ``export_blueprint_image``.** Writes are now
+  constrained to a single export root directory (system temp dir by default,
+  overridable via the ``CLOUDCRAFT_EXPORT_DIR`` environment variable). Both
+  the caller-supplied ``output_path`` and the default filename are resolved
+  and verified to be strictly under that root before any bytes are written.
+  A new ``overwrite: bool = False`` parameter stops the tool from silently
+  clobbering an existing file. Together this closes a prompt-injection hole
+  where an LLM could direct a PNG/SVG payload at ``~/.ssh/authorized_keys``
+  or other arbitrary paths.
+- **Path-segment validation on all URL-building client methods.** httpx
+  normalises ``..`` segments in URL paths per RFC 3986 before dispatching
+  the request, which meant an attacker-controlled ``blueprint_id`` of
+  ``"../user/me"`` would reach the upstream as ``GET /user/me`` and let the
+  caller pivot to Cloudcraft endpoints this MCP server does not expose.
+  ``blueprint_id`` and ``account_id`` are now UUID-validated, ``region``
+  matches an AWS region regex, and ``service`` matches a short lowercase
+  slug regex. Invalid inputs raise ``ValueError`` before any HTTP call.
+- **Error-body truncation and Bearer-token redaction.** ``_format_error``
+  caps the upstream response body at 500 characters and replaces anything
+  matching ``Bearer <token>`` with ``Bearer ***`` before surfacing it to
+  the MCP host, so an Authorization header echoed in a 4xx body can no
+  longer leak the live API key into the LLM context.
+- **HTTPS enforcement on ``CLOUDCRAFT_BASE_URL``.** A tampered env var can
+  no longer silently downgrade Bearer-token traffic to cleartext; non-
+  ``https://`` values are rejected at startup. ``http://localhost`` and
+  ``http://127.0.0.1`` remain allowed for local proxy / mock-server testing.
+
+### Added
+- ``CLOUDCRAFT_EXPORT_DIR`` environment variable to control where
+  ``export_blueprint_image`` may write.
+- ``overwrite`` parameter on ``export_blueprint_image`` (default ``False``).
+- Unit tests for all new input-validation and redaction paths.
+
+### Changed
+- ``get_blueprint``, ``update_blueprint``, ``delete_blueprint``, and
+  ``snapshot_aws`` now translate ``ValueError`` from client-side validation
+  into a ``RuntimeError`` with a human-readable message, matching the
+  existing pattern used by ``export_blueprint_image``.
+
+### Fixed
+- ``CHANGELOG`` note for 0.1.2 incorrectly read ``astral-sh/setup-uv@v5``
+  whereas both workflows actually bumped to ``@v6``.
+
 ## [0.1.2] - 2026-04-22
 
 ### Fixed
@@ -17,7 +63,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 - Synchronised ``cloudcraft_mcp.__version__`` with ``pyproject.toml``.
-- Bumped ``astral-sh/setup-uv`` to ``@v5`` in ``publish.yml`` (matches CI).
+- Bumped ``astral-sh/setup-uv`` to ``@v6`` in ``publish.yml`` (matches CI).
 
 ## [0.1.1] - 2026-04-22
 
@@ -65,6 +111,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `cloudcraft-mcp` console script entry point.
 - Project metadata, MIT license, and CI workflow.
 
+[0.1.3]: https://github.com/hypark5540/cloudcraft-mcp/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/hypark5540/cloudcraft-mcp/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/hypark5540/cloudcraft-mcp/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/hypark5540/cloudcraft-mcp/releases/tag/v0.1.0

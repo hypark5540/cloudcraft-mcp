@@ -7,6 +7,7 @@ CLI, etc.).
 from __future__ import annotations
 
 import logging
+import re
 from collections.abc import Mapping
 from typing import Any, cast
 
@@ -18,6 +19,37 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_BASE_URL = "https://api.cloudcraft.co"
 DEFAULT_TIMEOUT = httpx.Timeout(30.0, connect=10.0)
+
+# ---- path-segment validation ------------------------------------------------
+# Defense-in-depth against LLM-supplied values containing "..", "?", "/" etc.
+# httpx normalises "/a/../b" to "/b" before sending, which would otherwise let
+# a caller pivot to Cloudcraft endpoints this MCP server does not expose.
+_UUID_RE = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+# AWS region codes: e.g. ap-northeast-2, us-east-1, eu-west-3, us-gov-west-1.
+_REGION_RE = re.compile(r"^[a-z]{2}(?:-[a-z]+)+-\d$")
+# AWS/Cloudcraft service slugs are lowercase alphanumerics and dashes. Loose
+# regex (no hard-coded whitelist) so we don't have to track every new service.
+_SERVICE_RE = re.compile(r"^[a-z][a-z0-9-]{1,31}$")
+
+
+def _validate_uuid(name: str, value: str) -> str:
+    if not isinstance(value, str) or not _UUID_RE.match(value):
+        raise ValueError(f"{name} must be a UUID (got {value!r})")
+    return value
+
+
+def _validate_region(value: str) -> str:
+    if not isinstance(value, str) or not _REGION_RE.match(value):
+        raise ValueError(f"region must look like 'ap-northeast-2' (got {value!r})")
+    return value
+
+
+def _validate_service(value: str) -> str:
+    if not isinstance(value, str) or not _SERVICE_RE.match(value):
+        raise ValueError(
+            f"service must be a short lowercase slug like 'ec2' (got {value!r})"
+        )
+    return value
 
 
 class CloudcraftError(RuntimeError):
@@ -114,6 +146,7 @@ class CloudcraftClient:
         return await self._request_json("GET", "/blueprint")
 
     async def get_blueprint(self, blueprint_id: str) -> dict[str, Any]:
+        blueprint_id = _validate_uuid("blueprint_id", blueprint_id)
         return await self._request_json("GET", f"/blueprint/{blueprint_id}")
 
     async def create_blueprint(self, data: Mapping[str, Any]) -> dict[str, Any]:
@@ -124,11 +157,13 @@ class CloudcraftClient:
     async def update_blueprint(
         self, blueprint_id: str, data: Mapping[str, Any]
     ) -> dict[str, Any]:
+        blueprint_id = _validate_uuid("blueprint_id", blueprint_id)
         return await self._request_json(
             "PUT", f"/blueprint/{blueprint_id}", json={"data": dict(data)}
         )
 
     async def delete_blueprint(self, blueprint_id: str) -> None:
+        blueprint_id = _validate_uuid("blueprint_id", blueprint_id)
         await self._request("DELETE", f"/blueprint/{blueprint_id}")
 
     async def export_blueprint(
@@ -141,6 +176,7 @@ class CloudcraftClient:
     ) -> bytes:
         if fmt not in ("png", "svg", "pdf", "mxgraph"):
             raise ValueError(f"unsupported format: {fmt!r}")
+        blueprint_id = _validate_uuid("blueprint_id", blueprint_id)
         params: dict[str, Any] = {}
         if scale is not None:
             params["scale"] = scale
@@ -158,6 +194,9 @@ class CloudcraftClient:
     async def snapshot_aws(
         self, account_id: str, region: str, service: str
     ) -> dict[str, Any]:
+        account_id = _validate_uuid("account_id", account_id)
+        region = _validate_region(region)
+        service = _validate_service(service)
         return await self._request_json(
             "GET", f"/aws/account/{account_id}/snapshot/{region}/{service}"
         )

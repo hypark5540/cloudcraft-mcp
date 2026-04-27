@@ -1,6 +1,7 @@
 # cloudcraft-mcp
 
 [![CI](https://github.com/hypark5540/cloudcraft-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/hypark5540/cloudcraft-mcp/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/hypark5540/cloudcraft-mcp/branch/main/graph/badge.svg)](https://codecov.io/gh/hypark5540/cloudcraft-mcp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 
@@ -122,6 +123,20 @@ uv run mypy src          # type check
 ```
 
 Tests mock the HTTP layer with [respx](https://lundberg.github.io/respx/) so no API key is required.
+
+#### Coverage
+
+CI uploads `coverage.xml` from the Python 3.12 matrix cell to
+[Codecov](https://codecov.io/gh/hypark5540/cloudcraft-mcp). The project gate
+is **80% or higher** — a PR that drops overall or patch coverage by more
+than 1 percentage point below that line fails the Codecov check
+(`codecov.yml`).
+
+Run the same report locally:
+
+```bash
+uv run pytest --cov=cloudcraft_mcp --cov-report=term-missing --cov-report=xml
+```
 
 ### Project layout
 

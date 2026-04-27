@@ -1,0 +1,40 @@
+# Codecov configuration
+# https://docs.codecov.com/docs/codecovyml-reference
+#
+# Gate: overall project coverage must stay at or above 80%. A PR may drop
+# coverage by up to 1 percentage point (threshold) before the Codecov check
+# fails — tight enough to catch regressions, loose enough to avoid noise
+# from a single skipped branch.
+
+coverage:
+  round: down
+  precision: 2
+  status:
+    project:
+      default:
+        target: 80%
+        threshold: 1%
+        if_ci_failed: error
+        informational: false
+        only_pulls: false
+    patch:
+      default:
+        target: 80%
+        threshold: 1%
+        if_ci_failed: error
+
+comment:
+  layout: "reach, diff, flags, files"
+  behavior: default
+  require_changes: false
+
+# Don't measure coverage of test files themselves or build artifacts.
+# NOTE: the repo-root ``server.py`` shim is already excluded by the
+# ``[tool.coverage.run] source = ["cloudcraft_mcp"]`` setting in
+# pyproject.toml, so it never reaches coverage.xml. Do NOT add
+# ``"server.py"`` here — Codecov treats bare filenames as ``**/server.py``
+# and would wipe out the real ``src/cloudcraft_mcp/server.py`` module.
+ignore:
+  - "tests/**/*"
+  - "**/__init__.py"
+  - "**/__main__.py"  # trivial `python -m cloudcraft_mcp` shim

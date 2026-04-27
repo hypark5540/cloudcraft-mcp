@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "cloudcraft-mcp"
-version = "0.1.2"
+version = "0.1.3"
 description = "Model Context Protocol (MCP) server for Cloudcraft.co — list, read, export, create, update, and delete cloud architecture blueprints from Claude Desktop and other MCP clients."
 readme = "README.md"
 license = { text = "MIT" }
@@ -99,3 +99,28 @@ markers = [
     "unit: unit tests (no network)",
     "integration: integration tests (hit real API)",
 ]
+
+# Mirror the Codecov `ignore` list so the local pytest-cov percentage matches
+# what Codecov reports. Trivial entry-point shims and package __init__ files
+# shouldn't drag the number down.
+#
+# Note: coverage.py implicitly prepends ``*/`` to omit patterns without a path
+# separator, so bare ``"server.py"`` would also match ``src/cloudcraft_mcp/
+# server.py`` and wipe out coverage of the real module. ``source`` below
+# already scopes measurement to the package, which excludes the repo-root
+# back-compat shim, so we don't need to list it here.
+[tool.coverage.run]
+source = ["cloudcraft_mcp"]
+omit = [
+    "*/__init__.py",
+    "*/__main__.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.:",
+    "raise NotImplementedError",
+]
+show_missing = true
+skip_covered = false
