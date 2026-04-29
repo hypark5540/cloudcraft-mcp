@@ -4,6 +4,26 @@ All notable changes to this project are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.4] - 2026-04-29
+
+### Security
+- **Tighten loopback HTTPS allowlist against substring-prefix bypass.** The
+  ``CLOUDCRAFT_BASE_URL`` startup gate added in 0.1.3 used
+  ``str.startswith()`` against ``"http://localhost"`` and
+  ``"http://127.0.0.1"``, which also matched attacker-controlled hostnames
+  like ``http://localhost.evil.example.com`` and
+  ``http://127.0.0.1.evil.example.com``. A tampered env var pointing at
+  such a host would silently downgrade the Bearer API key to cleartext on
+  the public internet — defeating Fix #4 of 0.1.3. The check now uses
+  ``urllib.parse.urlparse`` and compares the scheme + hostname exactly.
+  ``http://127.0.0.10`` and other 127.0.0.0/8 addresses, which were
+  accidentally accepted before, are now rejected; only ``localhost`` and
+  ``127.0.0.1`` remain allowed for local proxy / mock-server testing.
+
+### Added
+- Parametrised regression test ``test_base_url_rejects_loopback_lookalikes``
+  covering the four bypass strings above.
+
 ## [0.1.3] - 2026-04-23
 
 ### Security
