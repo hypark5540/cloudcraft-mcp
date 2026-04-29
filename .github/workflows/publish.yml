@@ -1,5 +1,10 @@
 name: Publish to PyPI
 
+# GitHub Actions에서 PyPI에 패키지를 배포하기 위한 권한 설정
+permissions:
+  id-token: write    # OIDC for PyPI trusted publishing
+  contents: read     # actions/checkout
+
 on:
   push:
     tags:
