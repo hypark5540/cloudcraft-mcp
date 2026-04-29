@@ -12,6 +12,7 @@ import sys
 import tempfile
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 from mcp.server.fastmcp import FastMCP
 
@@ -44,11 +45,17 @@ def _build_client() -> CloudcraftClient:
     # Fix #4: reject non-HTTPS base URLs so a tampered env var cannot silently
     # downgrade the Bearer token to cleartext. Loopback HTTP is allowed for
     # local testing against a proxy or mock server.
-    if not (
-        base_url.startswith("https://")
-        or base_url.startswith("http://localhost")
-        or base_url.startswith("http://127.0.0.1")
-    ):
+    #
+    # Parse the URL and match the hostname exactly. A naive startswith() check
+    # on "http://localhost" / "http://127.0.0.1" matches attacker-controlled
+    # hosts like "http://localhost.evil.example.com", which would silently
+    # downgrade Bearer auth to cleartext over the public internet.
+    parsed = urlparse(base_url)
+    is_https = parsed.scheme == "https"
+    is_loopback_http = (
+        parsed.scheme == "http" and parsed.hostname in ("localhost", "127.0.0.1")
+    )
+    if not (is_https or is_loopback_http):
         print(
             f"ERROR: CLOUDCRAFT_BASE_URL must be https:// (or http://localhost for testing). "
             f"Got: {base_url!r}",

@@ -201,6 +201,30 @@ def test_base_url_allows_loopback_ip(monkeypatch: pytest.MonkeyPatch) -> None:
     assert server_module._client._base_url == "http://127.0.0.1:9000"
 
 
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "bypass",
+    [
+        # Naive prefix match on "http://localhost" / "http://127.0.0.1" must
+        # NOT accept attacker-controlled hosts whose names just happen to
+        # start with that string.
+        "http://localhost.evil.example.com",
+        "http://localhost.evil.example.com/api",
+        "http://127.0.0.1.evil.example.com",
+        "http://127.0.0.10",
+    ],
+)
+def test_base_url_rejects_loopback_lookalikes(
+    monkeypatch: pytest.MonkeyPatch, bypass: str
+) -> None:
+    monkeypatch.setenv("CLOUDCRAFT_API_KEY", "k")
+    monkeypatch.setenv("CLOUDCRAFT_BASE_URL", bypass)
+    import cloudcraft_mcp.server as server_module
+
+    with pytest.raises(SystemExit):
+        importlib.reload(server_module)
+
+
 # ---- Fix #1: export_blueprint_image path-traversal whitelist ----------------
 
 
