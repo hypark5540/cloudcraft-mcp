@@ -15,6 +15,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
 
 from .client import CloudcraftClient, CloudcraftError, _validate_uuid
 from .types import BlueprintData
@@ -77,6 +78,32 @@ _EXPORT_ROOT: Path = Path(
 _client = _build_client()
 mcp: FastMCP = FastMCP("cloudcraft")
 
+_READ_ONLY_EXTERNAL_TOOL = ToolAnnotations(readOnlyHint=True, openWorldHint=True)
+_CREATE_BLUEPRINT_TOOL = ToolAnnotations(
+    readOnlyHint=False,
+    destructiveHint=False,
+    idempotentHint=False,
+    openWorldHint=True,
+)
+_UPDATE_BLUEPRINT_TOOL = ToolAnnotations(
+    readOnlyHint=False,
+    destructiveHint=True,
+    idempotentHint=True,
+    openWorldHint=True,
+)
+_DELETE_BLUEPRINT_TOOL = ToolAnnotations(
+    readOnlyHint=False,
+    destructiveHint=True,
+    idempotentHint=False,
+    openWorldHint=True,
+)
+_EXPORT_IMAGE_TOOL = ToolAnnotations(
+    readOnlyHint=False,
+    destructiveHint=True,
+    idempotentHint=False,
+    openWorldHint=True,
+)
+
 
 # ---- helpers -----------------------------------------------------------------
 def _format_error(exc: CloudcraftError) -> str:
@@ -115,7 +142,7 @@ def _resolve_export_path(blueprint_id: str, ext: str, output_path: str | None) -
 
 
 # ---- user --------------------------------------------------------------------
-@mcp.tool()
+@mcp.tool(annotations=_READ_ONLY_EXTERNAL_TOOL)
 async def whoami() -> dict[str, Any]:
     """Return the Cloudcraft user profile for the current API key.
 
@@ -128,7 +155,7 @@ async def whoami() -> dict[str, Any]:
 
 
 # ---- blueprints --------------------------------------------------------------
-@mcp.tool()
+@mcp.tool(annotations=_READ_ONLY_EXTERNAL_TOOL)
 async def list_blueprints() -> dict[str, Any]:
     """List every Cloudcraft blueprint (diagram) in the authenticated account.
 
@@ -156,7 +183,7 @@ async def list_blueprints() -> dict[str, Any]:
     }
 
 
-@mcp.tool()
+@mcp.tool(annotations=_READ_ONLY_EXTERNAL_TOOL)
 async def get_blueprint(blueprint_id: str) -> dict[str, Any]:
     """Fetch the full blueprint payload (nodes, edges, groups, layout).
 
@@ -171,7 +198,7 @@ async def get_blueprint(blueprint_id: str) -> dict[str, Any]:
         raise RuntimeError(str(exc)) from exc
 
 
-@mcp.tool()
+@mcp.tool(annotations=_CREATE_BLUEPRINT_TOOL)
 async def create_blueprint(name: str, data: BlueprintData) -> dict[str, Any]:
     """Create a new Cloudcraft blueprint.
 
@@ -190,7 +217,7 @@ async def create_blueprint(name: str, data: BlueprintData) -> dict[str, Any]:
         raise RuntimeError(_format_error(exc)) from exc
 
 
-@mcp.tool()
+@mcp.tool(annotations=_UPDATE_BLUEPRINT_TOOL)
 async def update_blueprint(blueprint_id: str, data: BlueprintData) -> dict[str, Any]:
     """Replace the full data payload of an existing blueprint.
 
@@ -206,7 +233,7 @@ async def update_blueprint(blueprint_id: str, data: BlueprintData) -> dict[str, 
         raise RuntimeError(str(exc)) from exc
 
 
-@mcp.tool()
+@mcp.tool(annotations=_DELETE_BLUEPRINT_TOOL)
 async def delete_blueprint(blueprint_id: str) -> dict[str, Any]:
     """Delete a Cloudcraft blueprint. Irreversible — confirm before calling.
 
@@ -222,7 +249,7 @@ async def delete_blueprint(blueprint_id: str) -> dict[str, Any]:
     return {"deleted": blueprint_id}
 
 
-@mcp.tool()
+@mcp.tool(annotations=_EXPORT_IMAGE_TOOL)
 async def export_blueprint_image(
     blueprint_id: str,
     format: str = "png",
@@ -277,7 +304,7 @@ async def export_blueprint_image(
 
 
 # ---- aws live-scan ----------------------------------------------------------
-@mcp.tool()
+@mcp.tool(annotations=_READ_ONLY_EXTERNAL_TOOL)
 async def list_aws_accounts() -> dict[str, Any]:
     """List AWS accounts registered with Cloudcraft for live-scan snapshots."""
     try:
@@ -286,7 +313,7 @@ async def list_aws_accounts() -> dict[str, Any]:
         raise RuntimeError(_format_error(exc)) from exc
 
 
-@mcp.tool()
+@mcp.tool(annotations=_READ_ONLY_EXTERNAL_TOOL)
 async def snapshot_aws(account_id: str, region: str, service: str) -> dict[str, Any]:
     """Take a live-scan snapshot of one AWS service via Cloudcraft.
 

@@ -73,6 +73,7 @@ Restart Claude Desktop. The Developer tab should show `cloudcraft` as connected.
 | `CLOUDCRAFT_API_KEY` | yes | — | API key (Bearer). Generated in Cloudcraft User settings. |
 | `CLOUDCRAFT_BASE_URL` | no | `https://api.cloudcraft.co` | Override for proxies or future API versions. |
 | `CLOUDCRAFT_LOG_LEVEL` | no | `WARNING` | Stderr log verbosity (`DEBUG` / `INFO` / `WARNING` / `ERROR`). |
+| `CLOUDCRAFT_EXPORT_DIR` | no | system temp dir | Directory that `export_blueprint_image` may write under. |
 
 ## Usage examples (in Claude)
 
@@ -168,7 +169,10 @@ cloudcraft-mcp/
 ## Security
 
 - API keys grant full read / write over your Cloudcraft account. Treat them as secrets and rotate regularly.
+- MCP tool annotations mark read-only tools and mutating/destructive tools so compatible hosts can present better approval prompts. These annotations are hints, not an enforcement layer.
+- The server does not implement its own approval workflow for `create_blueprint`, `update_blueprint`, or `delete_blueprint`; those calls rely on the MCP host's tool approval UX and the permissions on `CLOUDCRAFT_API_KEY`.
 - `delete_blueprint` is irreversible — when asking Claude to delete, be explicit about the target id.
+- `export_blueprint_image` writes are sandboxed under `CLOUDCRAFT_EXPORT_DIR` (system temp dir by default) and refuse to overwrite existing files unless `overwrite=True`.
 - For read-heavy setups, create a dedicated Cloudcraft user with read-only scope (if/when Cloudcraft adds scoped keys) and use that key for MCP.
 
 ## Contributing
