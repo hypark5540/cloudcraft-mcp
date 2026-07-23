@@ -149,7 +149,7 @@ jobs:
           STATUS="$(node scripts/verify-published-artifacts.mjs npm artifacts/*.tgz)"
           echo "status=$STATUS" >> "$GITHUB_OUTPUT"
       - if: steps.package-status.outputs.status == 'missing'
-        run: npm publish artifacts/*.tgz --access public --provenance
+        run: npm publish ./artifacts/*.tgz --access public --provenance
       - if: steps.package-status.outputs.status == 'matching'
         run: echo "Matching npm artifact already exists; skipping."
 
