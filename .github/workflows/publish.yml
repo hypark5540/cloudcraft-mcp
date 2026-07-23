@@ -6,9 +6,18 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: Immutable stable tag whose npm artifact needs recovery
+        description: Immutable stable tag whose release artifact needs recovery
         required: true
         type: string
+      recovery_target:
+        description: Distribution endpoint to recover
+        required: true
+        default: all
+        type: choice
+        options:
+          - all
+          - npm
+          - github-release
 
 permissions:
   contents: read
@@ -132,7 +141,7 @@ jobs:
 
   npm-recovery:
     name: Recover npm from an immutable tag
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && (inputs.recovery_target == 'all' || inputs.recovery_target == 'npm')
     runs-on: ubuntu-latest
     environment: release
     permissions:
@@ -183,6 +192,77 @@ jobs:
           else
             echo "Unexpected npm artifact status: $STATUS" >&2
             exit 1
+          fi
+
+  github-release-recovery:
+    name: Recover GitHub Release from an immutable tag
+    if: github.event_name == 'workflow_dispatch' && (inputs.recovery_target == 'all' || inputs.recovery_target == 'github-release')
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: write # Create or verify the recovered GitHub release.
+      id-token: write # Obtain the short-lived identity used for attestation.
+      attestations: write # Store signed MCPB provenance in GitHub Attestations.
+    env:
+      RELEASE_TAG: ${{ inputs.release_tag }}
+      SOURCE_DATE_EPOCH: "946684800"
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          ref: refs/tags/${{ inputs.release_tag }}
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: "24.18.0"
+          package-manager-cache: false
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.11.29"
+          enable-cache: false
+      - name: Verify tag and rebuild the MCPB artifact
+        run: |
+          VERSION="$(node -p "require('./package.json').version")"
+          test "$RELEASE_TAG" = "v$VERSION"
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          TAG_COMMIT="$(git rev-parse "refs/tags/$RELEASE_TAG^{commit}")"
+          test "$TAG_COMMIT" = "$(git rev-parse HEAD)"
+          git merge-base --is-ancestor "$TAG_COMMIT" refs/remotes/origin/main
+          npm run deps:locked
+          npm audit --audit-level=moderate
+          npm audit signatures
+          npm run check:versions
+          npm run build:mcpb
+          npm run verify:mcpb
+          MCPB="release-artifacts/mcpb/cloudcraft-mcp-$VERSION.mcpb"
+          test -f "$MCPB"
+          (cd "$(dirname "$MCPB")" && sha256sum "$(basename "$MCPB")" > "$(basename "$MCPB").sha256")
+          (cd "$(dirname "$MCPB")" && sha256sum --check "$(basename "$MCPB").sha256")
+      - uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6 # v4.2.0
+        with:
+          subject-path: release-artifacts/mcpb/*
+      - name: Create or verify GitHub release
+        env:
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            mkdir -p "$RUNNER_TEMP/existing-release"
+            for ASSET in release-artifacts/mcpb/*; do
+              basename "$ASSET"
+            done | sort > "$RUNNER_TEMP/expected-assets.txt"
+            gh release view "$RELEASE_TAG" --json assets \
+              --jq '.assets[].name' | sort > "$RUNNER_TEMP/remote-assets.txt"
+            diff --unified "$RUNNER_TEMP/expected-assets.txt" "$RUNNER_TEMP/remote-assets.txt"
+            gh release download "$RELEASE_TAG" \
+              --pattern '*.mcpb' --pattern '*.sha256' \
+              --dir "$RUNNER_TEMP/existing-release"
+            for ASSET in release-artifacts/mcpb/*; do
+              cmp "$ASSET" "$RUNNER_TEMP/existing-release/$(basename "$ASSET")"
+            done
+          else
+            gh release create "$RELEASE_TAG" release-artifacts/mcpb/* \
+              --verify-tag --generate-notes --title "$RELEASE_TAG"
           fi
 
   npm:
@@ -358,6 +438,7 @@ jobs:
           subject-path: release-assets/*
       - name: Create or verify GitHub release
         env:
+          GH_REPO: ${{ github.repository }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
