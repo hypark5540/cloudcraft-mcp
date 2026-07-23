@@ -251,8 +251,14 @@ jobs:
             for ASSET in release-artifacts/mcpb/*; do
               basename "$ASSET"
             done | sort > "$RUNNER_TEMP/expected-assets.txt"
-            gh release view "$RELEASE_TAG" --json assets \
-              --jq '.assets[].name' | sort > "$RUNNER_TEMP/remote-assets.txt"
+            gh release view "$RELEASE_TAG" \
+              --json assets,isDraft,isPrerelease,name,tagName \
+              > "$RUNNER_TEMP/release.json"
+            jq --exit-status --arg tag "$RELEASE_TAG" \
+              '.tagName == $tag and .name == $tag and (.isDraft | not) and (.isPrerelease | not)' \
+              "$RUNNER_TEMP/release.json" >/dev/null
+            jq -r '.assets[].name' "$RUNNER_TEMP/release.json" \
+              | sort > "$RUNNER_TEMP/remote-assets.txt"
             diff --unified "$RUNNER_TEMP/expected-assets.txt" "$RUNNER_TEMP/remote-assets.txt"
             gh release download "$RELEASE_TAG" \
               --pattern '*.mcpb' --pattern '*.sha256' \
@@ -446,8 +452,14 @@ jobs:
             for ASSET in release-assets/*; do
               basename "$ASSET"
             done | sort > "$RUNNER_TEMP/expected-assets.txt"
-            gh release view "$GITHUB_REF_NAME" --json assets \
-              --jq '.assets[].name' | sort > "$RUNNER_TEMP/remote-assets.txt"
+            gh release view "$GITHUB_REF_NAME" \
+              --json assets,isDraft,isPrerelease,name,tagName \
+              > "$RUNNER_TEMP/release.json"
+            jq --exit-status --arg tag "$GITHUB_REF_NAME" \
+              '.tagName == $tag and .name == $tag and (.isDraft | not) and (.isPrerelease | not)' \
+              "$RUNNER_TEMP/release.json" >/dev/null
+            jq -r '.assets[].name' "$RUNNER_TEMP/release.json" \
+              | sort > "$RUNNER_TEMP/remote-assets.txt"
             diff --unified "$RUNNER_TEMP/expected-assets.txt" "$RUNNER_TEMP/remote-assets.txt"
             gh release download "$GITHUB_REF_NAME" \
               --pattern '*.mcpb' --pattern '*.sha256' \
