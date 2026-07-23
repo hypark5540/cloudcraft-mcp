@@ -1,0 +1,61 @@
+{
+  "name": "@hypark5540/cloudcraft-mcp",
+  "version": "0.1.6",
+  "description": "Unofficial Model Context Protocol server for Cloudcraft architecture blueprints",
+  "type": "module",
+  "mcpName": "io.github.hypark5540/cloudcraft-mcp",
+  "bin": {
+    "cloudcraft-mcp": "bin/cloudcraft-mcp.mjs",
+    "hypark-cloudcraft-mcp": "bin/cloudcraft-mcp.mjs"
+  },
+  "files": [
+    "bin",
+    "npm/vendor",
+    "README.md",
+    "LICENSE",
+    "PRIVACY.md",
+    "SECURITY.md",
+    "server.json"
+  ],
+  "scripts": {
+    "deps:locked": "npm ci --ignore-scripts",
+    "build:npm": "node scripts/build-npm-wheel.mjs",
+    "build:npm-bootstrap": "node scripts/build-npm-bootstrap.mjs",
+    "build:mcpb": "node scripts/build-mcpb.mjs",
+    "check:versions": "node scripts/check-versions.mjs",
+    "smoke": "node scripts/smoke-stdio.mjs uv run --frozen cloudcraft-mcp",
+    "verify:mcpb": "node scripts/verify-mcpb.mjs",
+    "check": "npm run check:versions && npm run build:npm && npm run smoke && npm run build:mcpb && npm run verify:mcpb",
+    "prepack": "npm run check:versions && npm run build:npm"
+  },
+  "keywords": [
+    "cloudcraft",
+    "mcp",
+    "model-context-protocol",
+    "aws",
+    "architecture-diagram"
+  ],
+  "author": "hypark5540",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hypark5540/cloudcraft-mcp.git"
+  },
+  "homepage": "https://github.com/hypark5540/cloudcraft-mcp#readme",
+  "bugs": {
+    "url": "https://github.com/hypark5540/cloudcraft-mcp/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "overrides": {
+    "tmp": "0.2.7"
+  },
+  "devDependencies": {
+    "@anthropic-ai/mcpb": "2.1.2",
+    "fflate": "0.8.3"
+  }
+}

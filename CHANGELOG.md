@@ -4,6 +4,43 @@ All notable changes to this project are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.6] - 2026-07-23
+
+### Security
+- Disabled blueprint create/update operations by default behind
+  `CLOUDCRAFT_ENABLE_WRITES`, and placed irreversible deletes behind a second
+  `CLOUDCRAFT_ENABLE_DELETES` opt-in plus exact blueprint-ID confirmation.
+- Moved HTTPS base-URL enforcement into the reusable HTTP client, bounded
+  Cloudcraft responses to 25 MiB by default, and removed raw upstream bodies
+  from exception chains.
+- Replaced shared-temp export defaults and path check/write races with a
+  process-private directory, exclusive 0600 creation, and atomic symlink-safe
+  replacement.
+- Pinned build and CI actions, minimized workflow permissions, and added
+  Bandit, zizmor, npm audit/signature checks, and pip-audit gates.
+
+### Added
+- Multi-channel distribution through npm/npx, PyPI/uvx/pipx, GHCR/Docker,
+  Claude Desktop MCPB, Gemini CLI, Cursor, and the official MCP Registry.
+- A dependency-free npm launcher that runs the exact Python wheel embedded in
+  the npm tarball through `uv`, keeping one canonical Python implementation.
+- Installed-artifact MCP handshake tests and cross-registry wheel identity
+  checks in CI and the tag release workflow.
+- `--help` and `--version` CLI flags that work before an API key is configured.
+
+### Changed
+- Raised the MCP SDK floor to 1.28.1 and refreshed the lockfile to patched
+  releases of Starlette, python-multipart, cryptography, and
+  pydantic-settings, resolving all 13 open Dependabot vulnerability alerts.
+- Constrained the MCP SDK to the stable 1.x series and httpx to the 0.x series
+  to prevent an unreviewed major release from changing installed behavior.
+- Replaced clone-only installation guidance with immutable package examples.
+
+## [0.1.5] - 2026-06-01
+
+### Changed
+- Released synchronized package metadata after the 0.1.4 security fixes.
+
 ## [0.1.4] - 2026-04-29
 
 ### Security
@@ -131,6 +168,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `cloudcraft-mcp` console script entry point.
 - Project metadata, MIT license, and CI workflow.
 
+[0.1.6]: https://github.com/hypark5540/cloudcraft-mcp/compare/v0.1.5...v0.1.6
+[0.1.5]: https://github.com/hypark5540/cloudcraft-mcp/compare/v0.1.4...v0.1.5
+[0.1.4]: https://github.com/hypark5540/cloudcraft-mcp/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/hypark5540/cloudcraft-mcp/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/hypark5540/cloudcraft-mcp/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/hypark5540/cloudcraft-mcp/compare/v0.1.0...v0.1.1

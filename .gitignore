@@ -7,6 +7,9 @@ __pycache__/
 # Distribution / packaging
 .Python
 build/
+node_modules/
+npm/vendor/
+release-artifacts/
 develop-eggs/
 dist/
 downloads/
@@ -22,6 +25,8 @@ share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+*.tgz
+*.mcpb
 MANIFEST
 
 # PyInstaller
@@ -49,6 +54,11 @@ cover/
 
 # Environments
 .env
+.env.*
+.npmrc
+.pypirc
+*.pem
+*.key
 .venv
 env/
 venv/

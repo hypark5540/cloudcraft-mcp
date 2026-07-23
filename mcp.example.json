@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "cloudcraft": {
+      "command": "uvx",
+      "args": ["cloudcraft-mcp==0.1.6"],
+      "env": {
+        "CLOUDCRAFT_API_KEY": "replace-with-your-cloudcraft-api-key",
+        "CLOUDCRAFT_BASE_URL": "https://api.cloudcraft.co",
+        "CLOUDCRAFT_LOG_LEVEL": "WARNING",
+        "CLOUDCRAFT_ENABLE_WRITES": "false",
+        "CLOUDCRAFT_ENABLE_DELETES": "false"
+      }
+    }
+  }
+}

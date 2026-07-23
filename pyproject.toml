@@ -1,10 +1,10 @@
 [build-system]
-requires = ["hatchling>=1.24"]
+requires = ["hatchling==1.31.0"]
 build-backend = "hatchling.build"
 
 [project]
 name = "cloudcraft-mcp"
-version = "0.1.5"
+version = "0.1.6"
 description = "Model Context Protocol (MCP) server for Cloudcraft.co — list, read, export, create, update, and delete cloud architecture blueprints from Claude Desktop and other MCP clients."
 readme = "README.md"
 license = { text = "MIT" }
@@ -31,13 +31,21 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Software Development :: Libraries",
     "Topic :: System :: Systems Administration",
     "Typing :: Typed",
 ]
 dependencies = [
-    "mcp>=1.15.0",
-    "httpx>=0.27.0",
+    "mcp>=1.28.1,<2",
+    "httpx>=0.27.0,<1",
+    # Security floors for MCP's web-transport dependency chain.  This server
+    # uses stdio, but keeping these explicit prevents an existing environment
+    # from retaining versions covered by the July 2026 Dependabot advisories.
+    "cryptography>=48.0.1,<50",
+    "pydantic-settings>=2.14.2,<3",
+    "python-multipart>=0.0.31,<1",
+    "starlette>=1.3.1,<2",
     # typing.TypedDict on Python < 3.12 isn't introspectable by pydantic 2.x.
     # Pin typing_extensions explicitly so this works on the 3.10/3.11 CPython
     # shipped with most macOS/Ubuntu setups.

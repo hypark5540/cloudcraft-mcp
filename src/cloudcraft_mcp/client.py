@@ -10,6 +10,7 @@ import logging
 import re
 from collections.abc import Mapping
 from typing import Any, cast
+from urllib.parse import urlparse
 
 import httpx
 
@@ -19,6 +20,8 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_BASE_URL = "https://api.cloudcraft.co"
 DEFAULT_TIMEOUT = httpx.Timeout(30.0, connect=10.0)
+DEFAULT_MAX_RESPONSE_BYTES = 25 * 1024 * 1024
+_MAX_ERROR_BODY_BYTES = 4 * 1024
 
 # ---- path-segment validation ------------------------------------------------
 # Defense-in-depth against LLM-supplied values containing "..", "?", "/" etc.
@@ -52,13 +55,38 @@ def _validate_service(value: str) -> str:
     return value
 
 
+def _validate_base_url(value: str) -> str:
+    """Return a normalized API URL that cannot leak Bearer auth over HTTP."""
+    normalized = value.rstrip("/")
+    parsed = urlparse(normalized)
+    is_https = parsed.scheme == "https" and parsed.hostname is not None
+    is_loopback_http = (
+        parsed.scheme == "http"
+        and parsed.hostname in ("localhost", "127.0.0.1")
+    )
+    if not (is_https or is_loopback_http):
+        raise ValueError(
+            "base_url must use https:// (or http://localhost for local testing)"
+        )
+    if parsed.username is not None or parsed.password is not None:
+        raise ValueError("base_url must not contain credentials")
+    if parsed.query or parsed.fragment:
+        raise ValueError("base_url must not contain a query string or fragment")
+    return normalized
+
+
 class CloudcraftError(RuntimeError):
     """Raised when the Cloudcraft API returns a non-2xx response."""
 
     def __init__(self, status: int, body: str, method: str, url: str) -> None:
-        super().__init__(f"{method} {url} -> {status}: {body}")
+        # Keep the untrusted response body out of the exception message: an
+        # exception chain or debug traceback must not bypass the MCP-facing
+        # redaction performed by server._format_error().
+        super().__init__(f"{method} {url} -> {status}")
         self.status = status
         self.body = body
+        self.method = method
+        self.url = url
 
 
 class CloudcraftClient:
@@ -73,15 +101,19 @@ class CloudcraftClient:
         *,
         base_url: str = DEFAULT_BASE_URL,
         timeout: httpx.Timeout | float | None = None,
+        max_response_bytes: int = DEFAULT_MAX_RESPONSE_BYTES,
     ) -> None:
         if not api_key:
             raise ValueError("api_key is required")
-        self._base_url = base_url.rstrip("/")
+        if isinstance(max_response_bytes, bool) or max_response_bytes <= 0:
+            raise ValueError("max_response_bytes must be a positive integer")
+        self._base_url = _validate_base_url(base_url)
         self._headers = {
             "Authorization": f"Bearer {api_key}",
             "Accept": "application/json",
         }
         self._timeout = timeout if timeout is not None else DEFAULT_TIMEOUT
+        self._max_response_bytes = max_response_bytes
 
     # ---- internal helpers ---------------------------------------------------
     async def _request(
@@ -96,19 +128,65 @@ class CloudcraftClient:
         headers = dict(self._headers)
         if json is not None:
             headers["Content-Type"] = "application/json"
-        async with httpx.AsyncClient(timeout=self._timeout) as client:
-            logger.debug("%s %s", method, url)
-            response = await client.request(
-                method, url, headers=headers, params=params, json=json
-            )
-        if response.status_code >= 400:
+        try:
+            async with httpx.AsyncClient(timeout=self._timeout) as client:
+                logger.debug("%s %s", method, url)
+                async with client.stream(
+                    method, url, headers=headers, params=params, json=json
+                ) as response:
+                    declared_length = response.headers.get("content-length")
+                    if declared_length is not None:
+                        try:
+                            declared_bytes = int(declared_length)
+                        except ValueError:
+                            declared_bytes = 0
+                        if declared_bytes > self._max_response_bytes:
+                            raise CloudcraftError(
+                                status=502,
+                                body=(
+                                    "Cloudcraft response exceeded the configured "
+                                    f"{self._max_response_bytes}-byte limit"
+                                ),
+                                method=method,
+                                url=url,
+                            )
+
+                    content = bytearray()
+                    async for chunk in response.aiter_bytes():
+                        if len(content) + len(chunk) > self._max_response_bytes:
+                            raise CloudcraftError(
+                                status=502,
+                                body=(
+                                    "Cloudcraft response exceeded the configured "
+                                    f"{self._max_response_bytes}-byte limit"
+                                ),
+                                method=method,
+                                url=url,
+                            )
+                        content.extend(chunk)
+                    buffered = httpx.Response(
+                        status_code=response.status_code,
+                        headers=response.headers,
+                        content=bytes(content),
+                        request=response.request,
+                    )
+        except httpx.HTTPError as exc:
             raise CloudcraftError(
-                status=response.status_code,
-                body=response.text,
+                status=502,
+                body=f"Cloudcraft transport failed ({type(exc).__name__})",
+                method=method,
+                url=url,
+            ) from None
+        if buffered.status_code >= 400:
+            raise CloudcraftError(
+                status=buffered.status_code,
+                body=buffered.content[:_MAX_ERROR_BODY_BYTES].decode(
+                    buffered.encoding or "utf-8", errors="replace"
+                ),
                 method=method,
                 url=url,
             )
-        return response
+        return buffered
 
     async def _request_json(
         self,
@@ -121,13 +199,13 @@ class CloudcraftClient:
         response = await self._request(method, path, params=params, json=json)
         try:
             data = response.json()
-        except ValueError as exc:
+        except ValueError:
             raise CloudcraftError(
                 status=response.status_code,
-                body=f"invalid JSON body: {exc}",
+                body="invalid JSON body",
                 method=method,
                 url=f"{self._base_url}{path}",
-            ) from exc
+            ) from None
         if not isinstance(data, dict):
             raise CloudcraftError(
                 status=response.status_code,

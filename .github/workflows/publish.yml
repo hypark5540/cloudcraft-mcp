@@ -1,32 +1,367 @@
-name: Publish to PyPI
-
-# GitHub Actions에서 PyPI에 패키지를 배포하기 위한 권한 설정
-permissions:
-  id-token: write    # OIDC for PyPI trusted publishing
-  contents: read     # actions/checkout
+name: Release
 
 on:
   push:
-    tags:
-      - "v*.*.*"
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.repository }}
+  cancel-in-progress: false
 
 jobs:
-  build-and-publish:
+  validate:
+    name: Validate release artifacts
+    runs-on: ubuntu-latest
+    env:
+      SOURCE_DATE_EPOCH: "946684800"
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: "24.18.0"
+          package-manager-cache: false
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.11.29"
+          enable-cache: false
+      - run: npm run deps:locked
+      - name: Match the immutable tag to the release version
+        run: |
+          TAG_COMMIT="$(git rev-parse "$GITHUB_REF_NAME^{commit}")"
+          test "$TAG_COMMIT" = "$(git rev-parse HEAD)"
+          git merge-base --is-ancestor "$TAG_COMMIT" refs/remotes/origin/main
+          VERSION="$(node -p "require('./package.json').version")"
+          test "$GITHUB_REF_NAME" = "v$VERSION"
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          npm run check:versions
+      - name: Test and audit
+        run: |
+          uv sync --frozen --extra dev
+          uv run ruff check src tests
+          uv run mypy src
+          uv run pytest
+          npm audit --audit-level=moderate
+          npm audit signatures
+          uv export --locked --no-dev --no-hashes --no-emit-project \
+            --output-file "$RUNNER_TEMP/runtime-requirements.txt"
+          uvx --from pip-audit==2.10.1 pip-audit \
+            --requirement "$RUNNER_TEMP/runtime-requirements.txt" \
+            --progress-spinner off
+          uv export --locked --extra dev --no-hashes --no-emit-project \
+            --output-file "$RUNNER_TEMP/dev-requirements.txt"
+          uvx --from pip-audit==2.10.1 pip-audit \
+            --requirement "$RUNNER_TEMP/dev-requirements.txt" \
+            --progress-spinner off
+      - name: Build all release artifacts
+        run: |
+          mkdir -p release-artifacts/npm release-artifacts/pypi release-artifacts/mcpb
+          uv build --wheel --sdist --no-sources --out-dir release-artifacts/pypi
+          uvx --from twine==6.2.0 twine check release-artifacts/pypi/*
+          npm run build:npm
+          npm run smoke
+          npm run build:mcpb
+          npm run verify:mcpb
+          npm pack --pack-destination release-artifacts/npm
+          MCPB="release-artifacts/mcpb/cloudcraft-mcp-${GITHUB_REF_NAME#v}.mcpb"
+          test -f "$MCPB"
+          (cd release-artifacts/mcpb && sha256sum "$(basename "$MCPB")" > "$(basename "$MCPB").sha256")
+      - name: Validate metadata and cross-registry wheel identity
+        run: |
+          uvx --from check-jsonschema==0.37.4 check-jsonschema \
+            --schemafile https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json \
+            server.json
+          VERSION="${GITHUB_REF_NAME#v}"
+          PYPI_WHEEL="release-artifacts/pypi/cloudcraft_mcp-$VERSION-py3-none-any.whl"
+          tar -xOzf release-artifacts/npm/*.tgz \
+            "package/npm/vendor/cloudcraft_mcp-$VERSION-py3-none-any.whl" \
+            > "$RUNNER_TEMP/npm-wheel.whl"
+          cmp "$PYPI_WHEEL" "$RUNNER_TEMP/npm-wheel.whl"
+      - name: Smoke-test installed packages
+        run: | # zizmor: ignore[adhoc-packages] Installs only locally built artifacts.
+          mkdir -p "$RUNNER_TEMP/npm-smoke"
+          npm install --ignore-scripts --prefix "$RUNNER_TEMP/npm-smoke" release-artifacts/npm/*.tgz
+          node scripts/smoke-stdio.mjs "$RUNNER_TEMP/npm-smoke/node_modules/.bin/cloudcraft-mcp"
+          uv venv "$RUNNER_TEMP/python-smoke"
+          uv pip install --python "$RUNNER_TEMP/python-smoke/bin/python" release-artifacts/pypi/*.whl
+          node scripts/smoke-stdio.mjs "$RUNNER_TEMP/python-smoke/bin/cloudcraft-mcp"
+      - name: Build and smoke-test container
+        run: |
+          docker build \
+            --tag cloudcraft-mcp:release \
+            --build-arg VERSION="${GITHUB_REF_NAME#v}" \
+            --build-arg REVISION="$GITHUB_SHA" \
+            .
+          node scripts/smoke-stdio.mjs \
+            docker run --rm -i \
+            -e CLOUDCRAFT_API_KEY=smoke-test-key \
+            cloudcraft-mcp:release
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: npm-package
+          path: release-artifacts/npm/*.tgz
+          if-no-files-found: error
+          retention-days: 90
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: pypi-package
+          path: release-artifacts/pypi/*
+          if-no-files-found: error
+          retention-days: 90
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: mcpb-package
+          path: |
+            release-artifacts/mcpb/*.mcpb
+            release-artifacts/mcpb/*.sha256
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 90
+
+  npm:
+    name: Publish npm
+    needs: validate
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: read
+      id-token: write # npm Trusted Publishing.
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: "24.18.0"
+          package-manager-cache: false
+          registry-url: https://registry.npmjs.org
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: npm-package
+          path: artifacts
+      - id: package-status
+        run: |
+          STATUS="$(node scripts/verify-published-artifacts.mjs npm artifacts/*.tgz)"
+          echo "status=$STATUS" >> "$GITHUB_OUTPUT"
+      - if: steps.package-status.outputs.status == 'missing'
+        run: npm publish artifacts/*.tgz --access public --provenance
+      - if: steps.package-status.outputs.status == 'matching'
+        run: echo "Matching npm artifact already exists; skipping."
+
+  pypi:
+    name: Publish PyPI
+    needs: validate
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
-      id-token: write    # ← OIDC 토큰 발급용. 이게 핵심
+      contents: read
+      id-token: write # PyPI Trusted Publishing.
     steps:
-      - uses: actions/checkout@v5
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
-          enable-cache: true
+          persist-credentials: false
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: "24.18.0"
+          package-manager-cache: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: pypi-package
+          path: artifacts
+      - id: package-status
+        run: |
+          STATUS="$(node scripts/verify-published-artifacts.mjs pypi artifacts/*)"
+          echo "status=$STATUS" >> "$GITHUB_OUTPUT"
+      - if: steps.package-status.outputs.status == 'missing'
+        uses: pypa/gh-action-pypi-publish@ba38be9e461d3875417946c167d0b5f3d385a247 # release/v1
+        with:
+          packages-dir: artifacts/
+          skip-existing: true
+      - if: steps.package-status.outputs.status == 'matching'
+        run: echo "Matching PyPI artifacts already exist; skipping."
 
-      - name: Build
-        run: uv build
+  container:
+    name: Publish GHCR
+    needs: validate
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: read
+      packages: write # Push this repository's versioned GHCR image.
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4.2.0
+      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+      - uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: image-status
+        name: Refuse to overwrite an immutable version image
+        env:
+          ACTOR: ${{ github.actor }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          IMAGE: ghcr.io/${{ github.repository_owner }}/cloudcraft-mcp
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          TOKEN="$(curl --fail --silent --show-error \
+            --user "$ACTOR:$GH_TOKEN" \
+            --get \
+            --data-urlencode service=ghcr.io \
+            --data-urlencode "scope=repository:$OWNER/cloudcraft-mcp:pull" \
+            https://ghcr.io/token | jq -er '.token')"
+          ACCEPT='application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json'
+          STATUS="$(curl --silent --show-error --head \
+            --header "Authorization: Bearer $TOKEN" \
+            --header "Accept: $ACCEPT" \
+            --output "$RUNNER_TEMP/image-headers.txt" \
+            --write-out '%{http_code}' \
+            "https://ghcr.io/v2/$OWNER/cloudcraft-mcp/manifests/$VERSION")"
+          if test "$STATUS" = 200; then
+            DIGEST="$(awk 'tolower($1) == "docker-content-digest:" { gsub(/\r/, "", $2); print $2 }' "$RUNNER_TEMP/image-headers.txt" | tail -1)"
+            [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+            docker buildx imagetools inspect --raw "$IMAGE@$DIGEST" \
+              > "$RUNNER_TEMP/image-index.json"
+            jq --exit-status \
+              '[.manifests[]? | select(.platform.os == "linux") | .platform.architecture] | sort == ["amd64", "arm64"]' \
+              "$RUNNER_TEMP/image-index.json" >/dev/null
+            for ARCH in amd64 arm64; do
+              CHILD_DIGEST="$(jq -r --arg arch "$ARCH" \
+                '.manifests[] | select(.platform.os == "linux" and .platform.architecture == $arch) | .digest' \
+                "$RUNNER_TEMP/image-index.json")"
+              [[ "$CHILD_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+              CHILD_IMAGE="$IMAGE@$CHILD_DIGEST"
+              docker pull --platform "linux/$ARCH" "$CHILD_IMAGE"
+              test "$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$CHILD_IMAGE")" = "$GITHUB_SHA"
+              test "$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.version" }}' "$CHILD_IMAGE")" = "$VERSION"
+              test "$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.source" }}' "$CHILD_IMAGE")" = "https://github.com/$GITHUB_REPOSITORY"
+            done
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          elif test "$STATUS" = 404; then
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          else
+            cat "$RUNNER_TEMP/image-headers.txt" >&2
+            echo "GHCR manifest lookup failed with HTTP $STATUS." >&2
+            exit 1
+          fi
+      - id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/cloudcraft-mcp
+          tags: |
+            type=semver,pattern={{version}}
+      - uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        if: steps.image-status.outputs.exists != 'true'
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ steps.meta.outputs.version }}
+            REVISION=${{ github.sha }}
+          provenance: mode=max
+          sbom: true
 
-      - name: Publish to PyPI (Trusted Publisher)
-        run: uv publish --trusted-publishing always
+  github-release:
+    name: Publish Claude Desktop MCPB
+    needs: [npm, pypi, container]
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: write # Create the GitHub release and upload its assets.
+      id-token: write # Obtain the short-lived identity used for attestation.
+      attestations: write # Store signed MCPB provenance in GitHub Attestations.
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: mcpb-package
+          path: release-assets
+      - run: (cd release-assets && sha256sum --check *.sha256)
+      - uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6 # v4.2.0
+        with:
+          subject-path: release-assets/*
+      - name: Create or verify GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            mkdir -p "$RUNNER_TEMP/existing-release"
+            for ASSET in release-assets/*; do
+              basename "$ASSET"
+            done | sort > "$RUNNER_TEMP/expected-assets.txt"
+            gh release view "$GITHUB_REF_NAME" --json assets \
+              --jq '.assets[].name' | sort > "$RUNNER_TEMP/remote-assets.txt"
+            diff --unified "$RUNNER_TEMP/expected-assets.txt" "$RUNNER_TEMP/remote-assets.txt"
+            gh release download "$GITHUB_REF_NAME" \
+              --pattern '*.mcpb' --pattern '*.sha256' \
+              --dir "$RUNNER_TEMP/existing-release"
+            for ASSET in release-assets/*; do
+              cmp "$ASSET" "$RUNNER_TEMP/existing-release/$(basename "$ASSET")"
+            done
+          else
+            gh release create "$GITHUB_REF_NAME" release-assets/* \
+              --verify-tag --generate-notes --title "$GITHUB_REF_NAME"
+          fi
 
+  mcp-registry:
+    name: Publish MCP Registry metadata
+    needs: [npm, pypi, container]
+    runs-on: ubuntu-latest
+    environment: mcp-registry
+    permissions:
+      contents: read
+      id-token: write # Authenticate MCP Registry publishing through GitHub OIDC.
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: "24.18.0"
+          package-manager-cache: false
+      - id: registry-status
+        run: |
+          NAME="$(node -p "encodeURIComponent(require('./server.json').name)")"
+          VERSION="$(node -p "encodeURIComponent(require('./server.json').version)")"
+          STATUS="$(curl --silent --show-error --output "$RUNNER_TEMP/registry.json" \
+            --write-out '%{http_code}' \
+            "https://registry.modelcontextprotocol.io/v0.1/servers/$NAME/versions/$VERSION")"
+          if test "$STATUS" = 404; then
+            echo "status=missing" >> "$GITHUB_OUTPUT"
+          elif test "$STATUS" = 200; then
+            jq --sort-keys 'del(."$schema", ._meta)' server.json > "$RUNNER_TEMP/local.json"
+            jq --sort-keys '.server | del(."$schema", ._meta)' "$RUNNER_TEMP/registry.json" > "$RUNNER_TEMP/remote.json"
+            diff --unified "$RUNNER_TEMP/local.json" "$RUNNER_TEMP/remote.json"
+            echo "status=matching" >> "$GITHUB_OUTPUT"
+          else
+            cat "$RUNNER_TEMP/registry.json" >&2
+            exit 1
+          fi
+      - if: steps.registry-status.outputs.status == 'missing'
+        name: Install verified MCP publisher
+        run: |
+          PUBLISHER_VERSION=1.8.0
+          ARCHIVE=mcp-publisher_linux_amd64.tar.gz
+          curl --fail --show-error --location \
+            "https://github.com/modelcontextprotocol/registry/releases/download/v${PUBLISHER_VERSION}/$ARCHIVE" \
+            --output "$ARCHIVE"
+          echo "1370446bbe74d562608e8005a6ccce02d146a661fbd78674e11cc70b9618d6cf  $ARCHIVE" \
+            | sha256sum --check --strict
+          tar xzf "$ARCHIVE" mcp-publisher
+      - if: steps.registry-status.outputs.status == 'missing'
+        run: ./mcp-publisher login github-oidc
+      - if: steps.registry-status.outputs.status == 'missing'
+        run: ./mcp-publisher publish
+      - if: steps.registry-status.outputs.status == 'matching'
+        run: echo "Matching MCP Registry version already exists; skipping."

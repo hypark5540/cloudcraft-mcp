@@ -27,6 +27,8 @@ def server_module(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     """Reload server with a controlled API key + export dir."""
     monkeypatch.setenv("CLOUDCRAFT_API_KEY", "test-key-for-startup")
     monkeypatch.setenv("CLOUDCRAFT_EXPORT_DIR", str(tmp_path))
+    monkeypatch.setenv("CLOUDCRAFT_ENABLE_WRITES", "true")
+    monkeypatch.setenv("CLOUDCRAFT_ENABLE_DELETES", "true")
     import cloudcraft_mcp.server as module
 
     return importlib.reload(module)
@@ -199,13 +201,15 @@ async def test_delete_blueprint_success(
     monkeypatch.setattr(
         server_module._client, "delete_blueprint", AsyncMock(return_value=None)
     )
-    assert await server_module.delete_blueprint(GOOD_UUID) == {"deleted": GOOD_UUID}
+    assert await server_module.delete_blueprint(GOOD_UUID, GOOD_UUID) == {
+        "deleted": GOOD_UUID
+    }
 
 
 @pytest.mark.unit
 async def test_delete_blueprint_rejects_bad_uuid(server_module) -> None:
     with pytest.raises(RuntimeError, match="must be a UUID"):
-        await server_module.delete_blueprint("../etc/passwd")
+        await server_module.delete_blueprint("../etc/passwd", "../etc/passwd")
 
 
 @pytest.mark.unit
@@ -218,7 +222,46 @@ async def test_delete_blueprint_cloudcraft_error(
         AsyncMock(side_effect=_fake_error(403, "forbidden")),
     )
     with pytest.raises(RuntimeError, match="403"):
-        await server_module.delete_blueprint(GOOD_UUID)
+        await server_module.delete_blueprint(GOOD_UUID, GOOD_UUID)
+
+
+@pytest.mark.unit
+async def test_mutations_are_disabled_by_default(
+    server_module, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("CLOUDCRAFT_ENABLE_WRITES")
+    create = AsyncMock(return_value={"id": GOOD_UUID})
+    monkeypatch.setattr(server_module._client, "create_blueprint", create)
+
+    with pytest.raises(RuntimeError, match="mutations are disabled"):
+        await server_module.create_blueprint("x", {"version": 6})  # type: ignore[arg-type]
+    create.assert_not_awaited()
+
+
+@pytest.mark.unit
+async def test_delete_requires_separate_opt_in(
+    server_module, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("CLOUDCRAFT_ENABLE_WRITES", "true")
+    monkeypatch.setenv("CLOUDCRAFT_ENABLE_DELETES", "false")
+    delete = AsyncMock(return_value=None)
+    monkeypatch.setattr(server_module._client, "delete_blueprint", delete)
+
+    with pytest.raises(RuntimeError, match="deletes are disabled"):
+        await server_module.delete_blueprint(GOOD_UUID, GOOD_UUID)
+    delete.assert_not_awaited()
+
+
+@pytest.mark.unit
+async def test_delete_requires_exact_id_confirmation(
+    server_module, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    delete = AsyncMock(return_value=None)
+    monkeypatch.setattr(server_module._client, "delete_blueprint", delete)
+
+    with pytest.raises(RuntimeError, match="must exactly match"):
+        await server_module.delete_blueprint(GOOD_UUID, "wrong-id")
+    delete.assert_not_awaited()
 
 
 # ---- export_blueprint_image -----------------------------------------------
@@ -279,6 +322,23 @@ async def test_export_blueprint_image_overwrite_flag(
         GOOD_UUID, "png", overwrite=True
     )
     assert Path(out["path"]).read_bytes() == b"new"
+
+
+@pytest.mark.unit
+def test_export_writer_replaces_symlink_without_following_it(
+    server_module, tmp_path: Path
+) -> None:
+    outside = tmp_path.parent / "outside-export-target.txt"
+    outside.write_bytes(b"outside")
+    target = tmp_path / "raced-export.png"
+    target.symlink_to(outside)
+
+    written = server_module._write_export_file(target, b"new", overwrite=True)
+
+    assert written == target
+    assert not target.is_symlink()
+    assert target.read_bytes() == b"new"
+    assert outside.read_bytes() == b"outside"
 
 
 @pytest.mark.unit

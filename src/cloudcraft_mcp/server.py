@@ -12,12 +12,17 @@ import sys
 import tempfile
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
 
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
-from .client import CloudcraftClient, CloudcraftError, _validate_uuid
+from . import __version__
+from .client import (
+    DEFAULT_MAX_RESPONSE_BYTES,
+    CloudcraftClient,
+    CloudcraftError,
+    _validate_uuid,
+)
 from .types import BlueprintData
 
 __all__ = ["mcp", "main"]
@@ -43,40 +48,40 @@ def _build_client() -> CloudcraftClient:
         )
         sys.exit(1)
     base_url = os.environ.get("CLOUDCRAFT_BASE_URL", "https://api.cloudcraft.co")
-    # Fix #4: reject non-HTTPS base URLs so a tampered env var cannot silently
-    # downgrade the Bearer token to cleartext. Loopback HTTP is allowed for
-    # local testing against a proxy or mock server.
-    #
-    # Parse the URL and match the hostname exactly. A naive startswith() check
-    # on "http://localhost" / "http://127.0.0.1" matches attacker-controlled
-    # hosts like "http://localhost.evil.example.com", which would silently
-    # downgrade Bearer auth to cleartext over the public internet.
-    parsed = urlparse(base_url)
-    is_https = parsed.scheme == "https"
-    is_loopback_http = (
-        parsed.scheme == "http" and parsed.hostname in ("localhost", "127.0.0.1")
-    )
-    if not (is_https or is_loopback_http):
+    try:
+        max_response_bytes = int(
+            os.environ.get(
+                "CLOUDCRAFT_MAX_RESPONSE_BYTES", str(DEFAULT_MAX_RESPONSE_BYTES)
+            )
+        )
+        return CloudcraftClient(
+            api_key=api_key,
+            base_url=base_url,
+            max_response_bytes=max_response_bytes,
+        )
+    except ValueError as exc:
         print(
-            f"ERROR: CLOUDCRAFT_BASE_URL must be https:// (or http://localhost for testing). "
-            f"Got: {base_url!r}",
+            f"ERROR: invalid Cloudcraft MCP configuration: {exc}",
             file=sys.stderr,
         )
         sys.exit(1)
-    return CloudcraftClient(api_key=api_key, base_url=base_url)
-
-
-# Directory that export_blueprint_image is allowed to write into. Defaults to
-# the system temp dir; override with CLOUDCRAFT_EXPORT_DIR to, say, a project
-# folder. Resolved once at import time so later symlink games cannot confuse
-# the whitelist check.
-_EXPORT_ROOT: Path = Path(
-    os.environ.get("CLOUDCRAFT_EXPORT_DIR", tempfile.gettempdir())
-).expanduser().resolve()
 
 
 _client = _build_client()
+
+# Directory that export_blueprint_image is allowed to write into. The default
+# is a process-private 0700 directory rather than the shared system temp root.
+_export_root_override = os.environ.get("CLOUDCRAFT_EXPORT_DIR")
+if _export_root_override:
+    _EXPORT_ROOT = Path(_export_root_override).expanduser().resolve()
+else:
+    _EXPORT_ROOT = Path(tempfile.mkdtemp(prefix="cloudcraft-mcp-exports-")).resolve()
+
 mcp: FastMCP = FastMCP("cloudcraft")
+# FastMCP 1.x does not expose the low-level Server ``version`` parameter, but
+# does expose its Server instance. Keep the MCP initialize metadata aligned
+# with the package version instead of reporting the SDK's own version.
+mcp._mcp_server.version = __version__
 
 _READ_ONLY_EXTERNAL_TOOL = ToolAnnotations(readOnlyHint=True, openWorldHint=True)
 _CREATE_BLUEPRINT_TOOL = ToolAnnotations(
@@ -101,6 +106,12 @@ _EXPORT_IMAGE_TOOL = ToolAnnotations(
     readOnlyHint=False,
     destructiveHint=True,
     idempotentHint=False,
+    openWorldHint=True,
+)
+_SNAPSHOT_TOOL = ToolAnnotations(
+    readOnlyHint=False,
+    destructiveHint=False,
+    idempotentHint=True,
     openWorldHint=True,
 )
 
@@ -141,6 +152,69 @@ def _resolve_export_path(blueprint_id: str, ext: str, output_path: str | None) -
     return candidate
 
 
+def _write_export_file(target: Path, content: bytes, *, overwrite: bool) -> Path:
+    """Write an export without following a raced final-component symlink."""
+    target.parent.mkdir(parents=True, exist_ok=True)
+    parent = target.parent.resolve()
+    if parent != _EXPORT_ROOT and _EXPORT_ROOT not in parent.parents:
+        raise RuntimeError(f"output_path must be under {_EXPORT_ROOT}")
+    final_target = parent / target.name
+
+    if overwrite:
+        fd, temporary_name = tempfile.mkstemp(
+            dir=parent, prefix=".cloudcraft-mcp-", suffix=".tmp"
+        )
+        try:
+            with os.fdopen(fd, "wb") as handle:
+                handle.write(content)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(temporary_name, final_target)
+        except BaseException:
+            Path(temporary_name).unlink(missing_ok=True)
+            raise
+        return final_target
+
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    try:
+        fd = os.open(final_target, flags, 0o600)
+    except FileExistsError as exc:
+        raise RuntimeError(
+            f"{final_target} already exists. Pass overwrite=True to replace it."
+        ) from exc
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
+    except BaseException:
+        final_target.unlink(missing_ok=True)
+        raise
+    return final_target
+
+
+def _enabled(name: str) -> bool:
+    value = os.environ.get(name, "false").strip().lower()
+    if value not in {"true", "false"}:
+        raise RuntimeError(f"{name} must be either 'true' or 'false'")
+    return value == "true"
+
+
+def _require_write_enabled(*, delete: bool = False) -> None:
+    if not _enabled("CLOUDCRAFT_ENABLE_WRITES"):
+        raise RuntimeError(
+            "Cloudcraft mutations are disabled. Set CLOUDCRAFT_ENABLE_WRITES=true "
+            "in the MCP server environment to enable them."
+        )
+    if delete and not _enabled("CLOUDCRAFT_ENABLE_DELETES"):
+        raise RuntimeError(
+            "Cloudcraft deletes are disabled. Also set "
+            "CLOUDCRAFT_ENABLE_DELETES=true to enable them."
+        )
+
+
 # ---- user --------------------------------------------------------------------
 @mcp.tool(annotations=_READ_ONLY_EXTERNAL_TOOL)
 async def whoami() -> dict[str, Any]:
@@ -151,7 +225,7 @@ async def whoami() -> dict[str, Any]:
     try:
         return await _client.whoami()
     except CloudcraftError as exc:
-        raise RuntimeError(_format_error(exc)) from exc
+        raise RuntimeError(_format_error(exc)) from None
 
 
 # ---- blueprints --------------------------------------------------------------
@@ -165,7 +239,7 @@ async def list_blueprints() -> dict[str, Any]:
     try:
         data = await _client.list_blueprints()
     except CloudcraftError as exc:
-        raise RuntimeError(_format_error(exc)) from exc
+        raise RuntimeError(_format_error(exc)) from None
 
     items = data.get("blueprints", data if isinstance(data, list) else [])
     return {
@@ -193,7 +267,7 @@ async def get_blueprint(blueprint_id: str) -> dict[str, Any]:
     try:
         return await _client.get_blueprint(blueprint_id)
     except CloudcraftError as exc:
-        raise RuntimeError(_format_error(exc)) from exc
+        raise RuntimeError(_format_error(exc)) from None
     except ValueError as exc:
         raise RuntimeError(str(exc)) from exc
 
@@ -210,11 +284,12 @@ async def create_blueprint(name: str, data: BlueprintData) -> dict[str, Any]:
 
     Returns the created blueprint metadata including the assigned id.
     """
+    _require_write_enabled()
     payload = {**data, "name": name}
     try:
         return await _client.create_blueprint(payload)
     except CloudcraftError as exc:
-        raise RuntimeError(_format_error(exc)) from exc
+        raise RuntimeError(_format_error(exc)) from None
 
 
 @mcp.tool(annotations=_UPDATE_BLUEPRINT_TOOL)
@@ -225,25 +300,33 @@ async def update_blueprint(blueprint_id: str, data: BlueprintData) -> dict[str, 
         blueprint_id: Blueprint UUID.
         data: Full blueprint payload (same shape as :func:`create_blueprint`).
     """
+    _require_write_enabled()
     try:
         return await _client.update_blueprint(blueprint_id, data)
     except CloudcraftError as exc:
-        raise RuntimeError(_format_error(exc)) from exc
+        raise RuntimeError(_format_error(exc)) from None
     except ValueError as exc:
         raise RuntimeError(str(exc)) from exc
 
 
 @mcp.tool(annotations=_DELETE_BLUEPRINT_TOOL)
-async def delete_blueprint(blueprint_id: str) -> dict[str, Any]:
-    """Delete a Cloudcraft blueprint. Irreversible — confirm before calling.
+async def delete_blueprint(
+    blueprint_id: str, confirm_blueprint_id: str
+) -> dict[str, Any]:
+    """Delete a Cloudcraft blueprint after exact-id confirmation.
 
     Args:
         blueprint_id: Blueprint UUID.
+        confirm_blueprint_id: Repeat the exact UUID to acknowledge the
+            irreversible operation.
     """
+    _require_write_enabled(delete=True)
+    if confirm_blueprint_id != blueprint_id:
+        raise RuntimeError("confirm_blueprint_id must exactly match blueprint_id")
     try:
         await _client.delete_blueprint(blueprint_id)
     except CloudcraftError as exc:
-        raise RuntimeError(_format_error(exc)) from exc
+        raise RuntimeError(_format_error(exc)) from None
     except ValueError as exc:
         raise RuntimeError(str(exc)) from exc
     return {"deleted": blueprint_id}
@@ -294,12 +377,11 @@ async def export_blueprint_image(
             blueprint_id, fmt, scale=scale, transparent=transparent
         )
     except CloudcraftError as exc:
-        raise RuntimeError(_format_error(exc)) from exc
+        raise RuntimeError(_format_error(exc)) from None
     except ValueError as exc:
         raise RuntimeError(str(exc)) from exc
 
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_bytes(content)
+    target = _write_export_file(target, content, overwrite=overwrite)
     return {"path": str(target), "bytes": len(content), "format": fmt}
 
 
@@ -310,10 +392,10 @@ async def list_aws_accounts() -> dict[str, Any]:
     try:
         return await _client.list_aws_accounts()
     except CloudcraftError as exc:
-        raise RuntimeError(_format_error(exc)) from exc
+        raise RuntimeError(_format_error(exc)) from None
 
 
-@mcp.tool(annotations=_READ_ONLY_EXTERNAL_TOOL)
+@mcp.tool(annotations=_SNAPSHOT_TOOL)
 async def snapshot_aws(account_id: str, region: str, service: str) -> dict[str, Any]:
     """Take a live-scan snapshot of one AWS service via Cloudcraft.
 
@@ -325,7 +407,7 @@ async def snapshot_aws(account_id: str, region: str, service: str) -> dict[str, 
     try:
         return await _client.snapshot_aws(account_id, region, service)
     except CloudcraftError as exc:
-        raise RuntimeError(_format_error(exc)) from exc
+        raise RuntimeError(_format_error(exc)) from None
     except ValueError as exc:
         raise RuntimeError(str(exc)) from exc
 

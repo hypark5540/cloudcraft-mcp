@@ -10,8 +10,33 @@ import on 3.10 / 3.11 CI runners and this test will surface the regression.
 from __future__ import annotations
 
 import importlib
+import os
+import subprocess
+import sys
 
 import pytest
+
+from cloudcraft_mcp import __version__
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("flag", ["--help", "--version"])
+def test_cli_information_does_not_require_api_key(flag: str) -> None:
+    """Package metadata must remain inspectable before secret configuration."""
+    env = os.environ.copy()
+    env.pop("CLOUDCRAFT_API_KEY", None)
+
+    completed = subprocess.run(
+        [sys.executable, "-m", "cloudcraft_mcp", flag],
+        check=False,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+
+    assert completed.returncode == 0
+    assert "cloudcraft-mcp" in completed.stdout
+    assert completed.stderr == ""
 
 
 @pytest.mark.unit
@@ -28,6 +53,7 @@ def test_server_module_imports(monkeypatch: pytest.MonkeyPatch) -> None:
 
     server_module = importlib.reload(server_module)
     assert server_module.mcp.name == "cloudcraft"
+    assert server_module.mcp._mcp_server.version == __version__
 
 
 @pytest.mark.unit
@@ -48,7 +74,6 @@ def test_tool_annotations_describe_mutation_risk(
         "list_blueprints",
         "get_blueprint",
         "list_aws_accounts",
-        "snapshot_aws",
     ):
         assert annotations[name].readOnlyHint is True
         assert annotations[name].openWorldHint is True
@@ -67,6 +92,10 @@ def test_tool_annotations_describe_mutation_risk(
 
     assert annotations["export_blueprint_image"].readOnlyHint is False
     assert annotations["export_blueprint_image"].destructiveHint is True
+
+    assert annotations["snapshot_aws"].readOnlyHint is False
+    assert annotations["snapshot_aws"].destructiveHint is False
+    assert annotations["snapshot_aws"].idempotentHint is True
 
 
 @pytest.mark.unit

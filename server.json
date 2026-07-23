@@ -1,0 +1,165 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.hypark5540/cloudcraft-mcp",
+  "title": "Cloudcraft MCP",
+  "description": "Unofficial MCP server for reading and managing Cloudcraft architecture blueprints",
+  "websiteUrl": "https://github.com/hypark5540/cloudcraft-mcp",
+  "repository": {
+    "url": "https://github.com/hypark5540/cloudcraft-mcp",
+    "source": "github"
+  },
+  "version": "0.1.6",
+  "packages": [
+    {
+      "registryType": "npm",
+      "registryBaseUrl": "https://registry.npmjs.org",
+      "identifier": "@hypark5540/cloudcraft-mcp",
+      "version": "0.1.6",
+      "runtimeHint": "npx",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "CLOUDCRAFT_API_KEY",
+          "description": "Cloudcraft API key with access to the target account",
+          "isRequired": true,
+          "isSecret": true
+        },
+        {
+          "name": "CLOUDCRAFT_BASE_URL",
+          "description": "Cloudcraft API base URL; HTTPS is required except for loopback testing",
+          "default": "https://api.cloudcraft.co"
+        },
+        {
+          "name": "CLOUDCRAFT_LOG_LEVEL",
+          "description": "Minimum log level written to stderr",
+          "default": "WARNING",
+          "choices": ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
+        },
+        {
+          "name": "CLOUDCRAFT_EXPORT_DIR",
+          "description": "Directory under which exported blueprint files may be written"
+        },
+        {
+          "name": "CLOUDCRAFT_ENABLE_WRITES",
+          "description": "Enable create and update operations",
+          "default": "false",
+          "choices": ["false", "true"]
+        },
+        {
+          "name": "CLOUDCRAFT_ENABLE_DELETES",
+          "description": "Enable irreversible deletes; writes must also be enabled",
+          "default": "false",
+          "choices": ["false", "true"]
+        },
+        {
+          "name": "CLOUDCRAFT_MAX_RESPONSE_BYTES",
+          "description": "Maximum bytes accepted from one Cloudcraft API response",
+          "default": "26214400",
+          "format": "number"
+        }
+      ]
+    },
+    {
+      "registryType": "pypi",
+      "registryBaseUrl": "https://pypi.org",
+      "identifier": "cloudcraft-mcp",
+      "version": "0.1.6",
+      "runtimeHint": "uvx",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "CLOUDCRAFT_API_KEY",
+          "description": "Cloudcraft API key with access to the target account",
+          "isRequired": true,
+          "isSecret": true
+        },
+        {
+          "name": "CLOUDCRAFT_BASE_URL",
+          "description": "Cloudcraft API base URL; HTTPS is required except for loopback testing",
+          "default": "https://api.cloudcraft.co"
+        },
+        {
+          "name": "CLOUDCRAFT_LOG_LEVEL",
+          "description": "Minimum log level written to stderr",
+          "default": "WARNING",
+          "choices": ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
+        },
+        {
+          "name": "CLOUDCRAFT_EXPORT_DIR",
+          "description": "Directory under which exported blueprint files may be written"
+        },
+        {
+          "name": "CLOUDCRAFT_ENABLE_WRITES",
+          "description": "Enable create and update operations",
+          "default": "false",
+          "choices": ["false", "true"]
+        },
+        {
+          "name": "CLOUDCRAFT_ENABLE_DELETES",
+          "description": "Enable irreversible deletes; writes must also be enabled",
+          "default": "false",
+          "choices": ["false", "true"]
+        },
+        {
+          "name": "CLOUDCRAFT_MAX_RESPONSE_BYTES",
+          "description": "Maximum bytes accepted from one Cloudcraft API response",
+          "default": "26214400",
+          "format": "number"
+        }
+      ]
+    },
+    {
+      "registryType": "oci",
+      "identifier": "ghcr.io/hypark5540/cloudcraft-mcp:0.1.6",
+      "runtimeHint": "docker",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "CLOUDCRAFT_API_KEY",
+          "description": "Cloudcraft API key with access to the target account",
+          "isRequired": true,
+          "isSecret": true
+        },
+        {
+          "name": "CLOUDCRAFT_BASE_URL",
+          "description": "Cloudcraft API base URL; HTTPS is required except for loopback testing",
+          "default": "https://api.cloudcraft.co"
+        },
+        {
+          "name": "CLOUDCRAFT_LOG_LEVEL",
+          "description": "Minimum log level written to stderr",
+          "default": "WARNING",
+          "choices": ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
+        },
+        {
+          "name": "CLOUDCRAFT_EXPORT_DIR",
+          "description": "Directory under which exported blueprint files may be written"
+        },
+        {
+          "name": "CLOUDCRAFT_ENABLE_WRITES",
+          "description": "Enable create and update operations",
+          "default": "false",
+          "choices": ["false", "true"]
+        },
+        {
+          "name": "CLOUDCRAFT_ENABLE_DELETES",
+          "description": "Enable irreversible deletes; writes must also be enabled",
+          "default": "false",
+          "choices": ["false", "true"]
+        },
+        {
+          "name": "CLOUDCRAFT_MAX_RESPONSE_BYTES",
+          "description": "Maximum bytes accepted from one Cloudcraft API response",
+          "default": "26214400",
+          "format": "number"
+        }
+      ]
+    }
+  ]
+}

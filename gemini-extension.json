@@ -1,0 +1,46 @@
+{
+  "name": "cloudcraft-mcp",
+  "version": "0.1.6",
+  "description": "Unofficial Cloudcraft blueprint access through the Model Context Protocol",
+  "mcpServers": {
+    "cloudcraft": {
+      "command": "npx",
+      "args": ["-y", "@hypark5540/cloudcraft-mcp@0.1.6"],
+      "env": {
+        "CLOUDCRAFT_API_KEY": "${CLOUDCRAFT_API_KEY}",
+        "CLOUDCRAFT_BASE_URL": "${CLOUDCRAFT_BASE_URL:-https://api.cloudcraft.co}",
+        "CLOUDCRAFT_LOG_LEVEL": "${CLOUDCRAFT_LOG_LEVEL:-WARNING}",
+        "CLOUDCRAFT_ENABLE_WRITES": "${CLOUDCRAFT_ENABLE_WRITES:-false}",
+        "CLOUDCRAFT_ENABLE_DELETES": "${CLOUDCRAFT_ENABLE_DELETES:-false}"
+      }
+    }
+  },
+  "settings": [
+    {
+      "name": "Cloudcraft API key",
+      "description": "API key from Cloudcraft User settings. It can authorize blueprint reads and writes, so never commit or share it.",
+      "envVar": "CLOUDCRAFT_API_KEY",
+      "sensitive": true
+    },
+    {
+      "name": "Cloudcraft API base URL",
+      "description": "Optional API endpoint override. Keep the default unless using a trusted HTTPS proxy or a loopback test server.",
+      "envVar": "CLOUDCRAFT_BASE_URL"
+    },
+    {
+      "name": "Log level",
+      "description": "Optional stderr log level: DEBUG, INFO, WARNING, ERROR, or CRITICAL.",
+      "envVar": "CLOUDCRAFT_LOG_LEVEL"
+    },
+    {
+      "name": "Enable blueprint writes",
+      "description": "Set true to permit create and update operations. The default is false.",
+      "envVar": "CLOUDCRAFT_ENABLE_WRITES"
+    },
+    {
+      "name": "Enable blueprint deletes",
+      "description": "Set true only with writes enabled to permit exact-ID-confirmed deletes.",
+      "envVar": "CLOUDCRAFT_ENABLE_DELETES"
+    }
+  ]
+}

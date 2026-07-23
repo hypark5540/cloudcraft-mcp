@@ -26,6 +26,20 @@ def test_init_requires_api_key() -> None:
 
 
 @pytest.mark.unit
+def test_client_rejects_insecure_base_url() -> None:
+    with pytest.raises(ValueError, match="must use https"):
+        CloudcraftClient(api_key="test-key", base_url="http://api.example.com")
+
+
+@pytest.mark.unit
+def test_cloudcraft_error_string_omits_untrusted_body() -> None:
+    secret = "Bearer should-not-appear"
+    exc = CloudcraftError(status=401, body=secret, method="GET", url="https://x")
+    assert secret not in str(exc)
+    assert exc.body == secret
+
+
+@pytest.mark.unit
 @respx.mock
 async def test_whoami_bearer_auth(client: CloudcraftClient) -> None:
     route = respx.get("https://api.cloudcraft.co/user/me").mock(
@@ -122,8 +136,9 @@ async def test_request_json_rejects_invalid_json(client: CloudcraftClient) -> No
     respx.get("https://api.cloudcraft.co/user/me").mock(
         return_value=httpx.Response(200, text="not-json-at-all")
     )
-    with pytest.raises(CloudcraftError, match="invalid JSON"):
+    with pytest.raises(CloudcraftError) as exc_info:
         await client.whoami()
+    assert exc_info.value.body == "invalid JSON body"
 
 
 @pytest.mark.unit
@@ -133,8 +148,46 @@ async def test_request_json_rejects_non_object(client: CloudcraftClient) -> None
     respx.get("https://api.cloudcraft.co/user/me").mock(
         return_value=httpx.Response(200, json=["not", "a", "dict"])
     )
-    with pytest.raises(CloudcraftError, match="expected JSON object"):
+    with pytest.raises(CloudcraftError) as exc_info:
         await client.whoami()
+    assert "expected JSON object" in exc_info.value.body
+
+
+@pytest.mark.unit
+@respx.mock
+async def test_response_size_is_bounded() -> None:
+    client = CloudcraftClient(api_key="test-key", max_response_bytes=4)
+    respx.get("https://api.cloudcraft.co/user/me").mock(
+        return_value=httpx.Response(200, content=b"12345")
+    )
+
+    with pytest.raises(CloudcraftError) as exc_info:
+        await client.whoami()
+
+    assert exc_info.value.status == 502
+    assert "4-byte limit" in exc_info.value.body
+
+
+@pytest.mark.unit
+@respx.mock
+async def test_transport_error_does_not_expose_request_details(
+    client: CloudcraftClient,
+) -> None:
+    request = httpx.Request(
+        "GET",
+        "https://api.cloudcraft.co/user/me",
+        headers={"Authorization": "Bearer do-not-leak"},
+    )
+    respx.get("https://api.cloudcraft.co/user/me").mock(
+        side_effect=httpx.ConnectError("connection failed", request=request)
+    )
+
+    with pytest.raises(CloudcraftError) as exc_info:
+        await client.whoami()
+
+    assert exc_info.value.status == 502
+    assert exc_info.value.body == "Cloudcraft transport failed (ConnectError)"
+    assert "do-not-leak" not in str(exc_info.value)
 
 
 @pytest.mark.unit

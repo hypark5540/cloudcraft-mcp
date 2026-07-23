@@ -1,21 +1,27 @@
 # Security Policy
 
-## Supported Versions
+## Supported versions
 
-Use this section to tell people about which versions of your project are
-currently being supported with security updates.
+Security fixes are released for the latest published version only.
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 5.1.x   | :white_check_mark: |
-| 5.0.x   | :x:                |
-| 4.0.x   | :white_check_mark: |
-| < 4.0   | :x:                |
+| Version | Supported |
+| ------- | --------- |
+| 0.1.x   | Yes       |
+| < 0.1   | No        |
 
-## Reporting a Vulnerability
+## Reporting a vulnerability
 
-Use this section to tell people how to report a vulnerability.
+Please use GitHub's private vulnerability reporting form:
 
-Tell them where to go, how often they can expect to get an update on a
-reported vulnerability, what to expect if the vulnerability is accepted or
-declined, etc.
+<https://github.com/hypark5540/cloudcraft-mcp/security/advisories/new>
+
+Do not open a public issue for a vulnerability or include a Cloudcraft API key
+in a report. Include the affected version, impact, reproduction steps, and any
+suggested mitigation. You should receive an acknowledgement within seven days.
+
+## Secret handling
+
+`CLOUDCRAFT_API_KEY` grants access to the Cloudcraft account associated with
+it. Keep it in the MCP client's secret store or process environment, never in
+source control, command-line arguments, issue reports, or logs. Rotate a key
+immediately if it may have been exposed.

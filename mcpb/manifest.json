@@ -1,0 +1,82 @@
+{
+  "$schema": "https://raw.githubusercontent.com/modelcontextprotocol/mcpb/main/schemas/mcpb-manifest-v0.4.schema.json",
+  "manifest_version": "0.4",
+  "name": "cloudcraft-mcp",
+  "display_name": "Cloudcraft MCP",
+  "version": "0.1.6",
+  "description": "Unofficial Cloudcraft architecture blueprint access through MCP",
+  "long_description": "List, inspect, create, update, delete, and export Cloudcraft architecture blueprints through a local Model Context Protocol server. The API key stays in the extension host's sensitive configuration and is sent only to the configured Cloudcraft API endpoint.",
+  "author": {
+    "name": "hypark5540",
+    "url": "https://github.com/hypark5540"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hypark5540/cloudcraft-mcp.git"
+  },
+  "homepage": "https://github.com/hypark5540/cloudcraft-mcp",
+  "documentation": "https://github.com/hypark5540/cloudcraft-mcp#readme",
+  "support": "https://github.com/hypark5540/cloudcraft-mcp/issues",
+  "server": {
+    "type": "uv",
+    "entry_point": "src/cloudcraft_mcp/__main__.py",
+    "mcp_config": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--directory",
+        "${__dirname}",
+        "--frozen",
+        "cloudcraft-mcp"
+      ],
+      "env": {
+        "CLOUDCRAFT_API_KEY": "${user_config.cloudcraft_api_key}",
+        "CLOUDCRAFT_ENABLE_WRITES": "${user_config.enable_writes}",
+        "CLOUDCRAFT_ENABLE_DELETES": "${user_config.enable_deletes}"
+      }
+    }
+  },
+  "tools_generated": true,
+  "keywords": [
+    "cloudcraft",
+    "aws",
+    "architecture",
+    "mcp",
+    "model-context-protocol"
+  ],
+  "license": "MIT",
+  "privacy_policies": [
+    "https://github.com/hypark5540/cloudcraft-mcp/blob/main/PRIVACY.md"
+  ],
+  "compatibility": {
+    "platforms": [
+      "darwin",
+      "win32",
+      "linux"
+    ],
+    "runtimes": {
+      "python": ">=3.10"
+    }
+  },
+  "user_config": {
+    "cloudcraft_api_key": {
+      "type": "string",
+      "title": "Cloudcraft API key",
+      "description": "Bearer API key generated in Cloudcraft user settings. It grants access to the associated Cloudcraft account.",
+      "required": true,
+      "sensitive": true
+    },
+    "enable_writes": {
+      "type": "boolean",
+      "title": "Enable blueprint writes",
+      "description": "Allow create and update operations. Disabled by default.",
+      "default": false
+    },
+    "enable_deletes": {
+      "type": "boolean",
+      "title": "Enable blueprint deletes",
+      "description": "Allow irreversible deletes. Writes must also be enabled, and the exact blueprint ID must be confirmed.",
+      "default": false
+    }
+  }
+}
