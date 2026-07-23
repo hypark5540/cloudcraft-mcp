@@ -185,7 +185,8 @@ jobs:
           TARBALLS=("$RUNNER_TEMP"/npm-recovery/*.tgz)
           test "${#TARBALLS[@]}" -eq 1
           VERSION="${RELEASE_TAG#v}"
-          STATUS="$(node scripts/verify-published-artifacts.mjs npm "$VERSION" "${TARBALLS[0]}")"
+          STATUS="$(CLOUDCRAFT_VERIFY_VERSION="$VERSION" \
+            node scripts/verify-published-artifacts.mjs npm "${TARBALLS[0]}")"
           if test "$STATUS" = missing; then
             npm publish "${TARBALLS[0]}" --access public --provenance
           elif test "$STATUS" = matching; then
@@ -296,7 +297,8 @@ jobs:
       - id: package-status
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          STATUS="$(node scripts/verify-published-artifacts.mjs npm "$VERSION" artifacts/*.tgz)"
+          STATUS="$(CLOUDCRAFT_VERIFY_VERSION="$VERSION" \
+            node scripts/verify-published-artifacts.mjs npm artifacts/*.tgz)"
           echo "status=$STATUS" >> "$GITHUB_OUTPUT"
       - if: steps.package-status.outputs.status == 'missing'
         run: npm publish ./artifacts/*.tgz --access public --provenance
@@ -326,7 +328,8 @@ jobs:
       - id: package-status
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          STATUS="$(node scripts/verify-published-artifacts.mjs pypi "$VERSION" artifacts/*)"
+          STATUS="$(CLOUDCRAFT_VERIFY_VERSION="$VERSION" \
+            node scripts/verify-published-artifacts.mjs pypi artifacts/*)"
           echo "status=$STATUS" >> "$GITHUB_OUTPUT"
       - if: steps.package-status.outputs.status == 'missing'
         uses: pypa/gh-action-pypi-publish@ba38be9e461d3875417946c167d0b5f3d385a247 # release/v1

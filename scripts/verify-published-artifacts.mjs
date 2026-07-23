@@ -12,7 +12,8 @@ const packageJson = JSON.parse(
 );
 const pyproject = await readFile(resolve(root, "pyproject.toml"), "utf8");
 const pypiName = pyproject.match(/^name\s*=\s*"([^"]+)"/m)?.[1];
-const [registry, version, ...artifacts] = process.argv.slice(2);
+const [registry, ...artifacts] = process.argv.slice(2);
+const version = process.env.CLOUDCRAFT_VERIFY_VERSION;
 
 if (
   packageJson.name !== npmName ||
@@ -23,8 +24,8 @@ if (
   artifacts.length === 0
 ) {
   console.error(
-    "Usage: node scripts/verify-published-artifacts.mjs " +
-      "<npm|pypi> <stable-version> <artifact...>",
+    "Usage: CLOUDCRAFT_VERIFY_VERSION=<stable-version> " +
+      "node scripts/verify-published-artifacts.mjs <npm|pypi> <artifact...>",
   );
   process.exit(2);
 }
