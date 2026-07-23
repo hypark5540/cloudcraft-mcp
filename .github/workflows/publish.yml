@@ -3,6 +3,12 @@ name: Release
 on:
   push:
     tags: ["v*.*.*"]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Immutable stable tag whose npm artifact needs recovery
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -14,6 +20,7 @@ concurrency:
 jobs:
   validate:
     name: Validate release artifacts
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     env:
       SOURCE_DATE_EPOCH: "946684800"
@@ -122,6 +129,61 @@ jobs:
           if-no-files-found: error
           compression-level: 0
           retention-days: 90
+
+  npm-recovery:
+    name: Recover npm from an immutable tag
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: read
+      id-token: write # Publish the recovered npm artifact through GitHub OIDC.
+    env:
+      RELEASE_TAG: ${{ inputs.release_tag }}
+      SOURCE_DATE_EPOCH: "946684800"
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          ref: ${{ inputs.release_tag }}
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: "24.18.0"
+          package-manager-cache: false
+          registry-url: https://registry.npmjs.org
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.11.29"
+          enable-cache: false
+      - name: Verify tag and rebuild the npm artifact
+        run: |
+          VERSION="$(node -p "require('./package.json').version")"
+          test "$RELEASE_TAG" = "v$VERSION"
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          TAG_COMMIT="$(git rev-parse "$RELEASE_TAG^{commit}")"
+          test "$TAG_COMMIT" = "$(git rev-parse HEAD)"
+          git merge-base --is-ancestor "$TAG_COMMIT" refs/remotes/origin/main
+          npm run deps:locked
+          npm audit --audit-level=moderate
+          npm audit signatures
+          npm run check
+          mkdir -p "$RUNNER_TEMP/npm-recovery"
+          npm pack --pack-destination "$RUNNER_TEMP/npm-recovery"
+      - name: Publish or verify the immutable npm version
+        run: |
+          shopt -s nullglob
+          TARBALLS=("$RUNNER_TEMP"/npm-recovery/*.tgz)
+          test "${#TARBALLS[@]}" -eq 1
+          STATUS="$(node scripts/verify-published-artifacts.mjs npm "${TARBALLS[0]}")"
+          if test "$STATUS" = missing; then
+            npm publish "${TARBALLS[0]}" --access public --provenance
+          elif test "$STATUS" = matching; then
+            echo "Matching npm artifact already exists; skipping."
+          else
+            echo "Unexpected npm artifact status: $STATUS" >&2
+            exit 1
+          fi
 
   npm:
     name: Publish npm
