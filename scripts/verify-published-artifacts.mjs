@@ -4,16 +4,27 @@ import { basename, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+// Keep outbound registry destinations independent of repository-controlled metadata.
+const npmName = "@hypark5540/cloudcraft-mcp";
+const expectedPypiName = "cloudcraft-mcp";
 const packageJson = JSON.parse(
   await readFile(resolve(root, "package.json"), "utf8"),
 );
 const pyproject = await readFile(resolve(root, "pyproject.toml"), "utf8");
 const pypiName = pyproject.match(/^name\s*=\s*"([^"]+)"/m)?.[1];
-const [registry, ...artifacts] = process.argv.slice(2);
+const [registry, version, ...artifacts] = process.argv.slice(2);
 
-if (!pypiName || !["npm", "pypi"].includes(registry) || artifacts.length === 0) {
+if (
+  packageJson.name !== npmName ||
+  pypiName !== expectedPypiName ||
+  packageJson.version !== version ||
+  !/^\d+\.\d+\.\d+$/.test(version) ||
+  !["npm", "pypi"].includes(registry) ||
+  artifacts.length === 0
+) {
   console.error(
-    "Usage: node scripts/verify-published-artifacts.mjs <npm|pypi> <artifact...>",
+    "Usage: node scripts/verify-published-artifacts.mjs " +
+      "<npm|pypi> <stable-version> <artifact...>",
   );
   process.exit(2);
 }
@@ -39,15 +50,15 @@ async function verifyNpm() {
     throw new Error("npm verification expects exactly one .tgz artifact.");
   }
   const url =
-    `https://registry.npmjs.org/${encodeURIComponent(packageJson.name)}/` +
-    encodeURIComponent(packageJson.version);
+    `https://registry.npmjs.org/${encodeURIComponent(npmName)}/` +
+    encodeURIComponent(version);
   const metadata = await fetchMetadata(url);
   if (!metadata) return "missing";
 
   const localIntegrity = `sha512-${await digest(artifacts[0], "sha512", "base64")}`;
   if (metadata.dist?.integrity !== localIntegrity) {
     throw new Error(
-      `Published npm integrity differs for ${packageJson.name}@${packageJson.version}.`,
+      `Published npm integrity differs for ${npmName}@${version}.`,
     );
   }
   return "matching";
@@ -55,12 +66,12 @@ async function verifyNpm() {
 
 async function verifyPypi() {
   const url =
-    `https://pypi.org/pypi/${encodeURIComponent(pypiName)}/` +
-    `${encodeURIComponent(packageJson.version)}/json`;
+    `https://pypi.org/pypi/${encodeURIComponent(expectedPypiName)}/` +
+    `${encodeURIComponent(version)}/json`;
   const metadata = await fetchMetadata(url);
   if (!metadata) return "missing";
   if (!Array.isArray(metadata.urls)) {
-    throw new Error(`PyPI returned invalid file metadata for ${pypiName}.`);
+    throw new Error(`PyPI returned invalid file metadata for ${expectedPypiName}.`);
   }
 
   const localByFilename = new Map();
@@ -79,7 +90,9 @@ async function verifyPypi() {
       typeof entry.digests?.sha256 !== "string" ||
       remoteByFilename.has(entry.filename)
     ) {
-      throw new Error(`PyPI returned invalid or duplicate file metadata for ${pypiName}.`);
+      throw new Error(
+        `PyPI returned invalid or duplicate file metadata for ${expectedPypiName}.`,
+      );
     }
     remoteByFilename.set(entry.filename, entry.digests.sha256);
   }
