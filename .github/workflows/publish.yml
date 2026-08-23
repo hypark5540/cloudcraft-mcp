@@ -42,7 +42,7 @@ jobs:
         with:
           node-version: "24.18.0"
           package-manager-cache: false
-      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           version: "0.11.29"
           enable-cache: false
@@ -161,7 +161,7 @@ jobs:
           node-version: "24.18.0"
           package-manager-cache: false
           registry-url: https://registry.npmjs.org
-      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           version: "0.11.29"
           enable-cache: false
@@ -218,7 +218,7 @@ jobs:
         with:
           node-version: "24.18.0"
           package-manager-cache: false
-      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           version: "0.11.29"
           enable-cache: false
@@ -240,7 +240,7 @@ jobs:
           test -f "$MCPB"
           (cd "$(dirname "$MCPB")" && sha256sum "$(basename "$MCPB")" > "$(basename "$MCPB").sha256")
           (cd "$(dirname "$MCPB")" && sha256sum --check "$(basename "$MCPB").sha256")
-      - uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6 # v4.2.0
+      - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-path: release-artifacts/mcpb/*
       - name: Create or verify GitHub release
@@ -332,7 +332,7 @@ jobs:
             node scripts/verify-published-artifacts.mjs pypi artifacts/*)"
           echo "status=$STATUS" >> "$GITHUB_OUTPUT"
       - if: steps.package-status.outputs.status == 'missing'
-        uses: pypa/gh-action-pypi-publish@ba38be9e461d3875417946c167d0b5f3d385a247 # release/v1
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # release/v1
         with:
           packages-dir: artifacts/
           skip-existing: true
@@ -352,8 +352,8 @@ jobs:
         with:
           persist-credentials: false
       - uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4.2.0
-      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
-      - uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
+      - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -445,7 +445,7 @@ jobs:
           name: mcpb-package
           path: release-assets
       - run: (cd release-assets && sha256sum --check *.sha256)
-      - uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6 # v4.2.0
+      - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-path: release-assets/*
       - name: Create or verify GitHub release
