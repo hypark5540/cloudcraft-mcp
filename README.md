@@ -15,7 +15,7 @@ architecture blueprints from Claude Desktop and other MCP clients.
 
 ## Features
 
-Nine tools exposed to the MCP host:
+Thirteen tools exposed to the MCP host:
 
 | Tool | Description |
 | ---- | ----------- |
@@ -26,8 +26,12 @@ Nine tools exposed to the MCP host:
 | `update_blueprint` | Replace an existing blueprint's payload. |
 | `delete_blueprint` | Delete a blueprint (irreversible). |
 | `export_blueprint_image` | Render a blueprint to PNG / SVG / PDF / mxgraph on disk. |
+| `export_blueprint_budget` | Export a blueprint's cost estimate as CSV / XLSX on disk. |
+| `list_teams` | List teams linked to the account. |
 | `list_aws_accounts` | List AWS accounts connected for live-scan snapshots. |
-| `snapshot_aws` | Take a live-scan snapshot of one AWS service. |
+| `snapshot_aws` | Live-scan one AWS region into blueprint JSON (optional `filter` / `exclude`). |
+| `list_azure_accounts` | List Azure accounts connected for live-scan snapshots. |
+| `snapshot_azure` | Live-scan one Azure region into blueprint JSON (optional `filter` / `exclude`). |
 
 ## Requirements
 
@@ -118,7 +122,9 @@ Once the server is connected, ask Claude things like:
 
 > *"Take the architecture I just designed and create a new Cloudcraft blueprint called 'Prod 2026'."*
 
-> *"Snapshot the EC2 instances in `ap-northeast-2` for my connected AWS account."*
+> *"Snapshot `ap-northeast-2` of my connected AWS account, excluding security groups."*
+
+> *"Export the monthly budget of blueprint `f0086b32-...` as CSV in EUR."*
 
 ## Blueprint payload shape
 

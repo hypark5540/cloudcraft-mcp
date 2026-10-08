@@ -51,11 +51,7 @@
   "engines": {
     "node": ">=22"
   },
-  "overrides": {
-    "tmp": "0.2.7"
-  },
   "devDependencies": {
-    "@anthropic-ai/mcpb": "2.1.2",
     "fflate": "0.8.3"
   }
 }

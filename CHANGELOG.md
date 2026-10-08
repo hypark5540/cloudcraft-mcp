@@ -4,6 +4,46 @@ All notable changes to this project are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- Gzip-compressed Cloudcraft responses no longer fail with a synthetic
+  `502 Cloudcraft transport failed (DecodingError)`: the buffered response was
+  re-running the `Content-Encoding` decoder on an already-decoded body
+  ([#20](https://github.com/hypark5540/cloudcraft-mcp/issues/20)).
+- `update_blueprint` reported every successful write as
+  `Cloudcraft API error (204): invalid JSON body`; Cloudcraft answers `PUT`
+  with `204 No Content`, which now yields `{"id": ..., "updated": true}`
+  ([#21](https://github.com/hypark5540/cloudcraft-mcp/issues/21)).
+- Service-specific node fields (`instanceType`, container `nodes`, `color`,
+  `mapSize` ...) were silently stripped by argument validation before the
+  request was sent. All blueprint TypedDicts now allow extra keys
+  ([#22](https://github.com/hypark5540/cloudcraft-mcp/issues/22)).
+- `snapshot_aws` called a non-existent `/aws/account/{id}/snapshot/{region}/{service}`
+  path. It now uses the documented `/aws/account/{id}/{region}/json` endpoint
+  with optional `filter` / `exclude` query parameters, and passes a
+  `STILL_PROCESSING` long-poll body through so the caller can retry.
+- `mxgraph` exports are requested with the API's `mxGraph` spelling.
+- `429 Too Many Requests` errors now include the `Retry-After` wait.
+
+### Added
+- `export_blueprint_budget` (CSV / XLSX cost estimate, same write sandbox as
+  image exports), `list_teams`, `list_azure_accounts` and `snapshot_azure`.
+
+### Security
+- Raised the `cryptography` floor to 50.0 (GHSA-g6cj-pr64-35w5) and added an
+  explicit `pyjwt>=2.15` floor for the MCP SDK's transitive dependency
+  (GHSA-ffc3-869f-jxw9 and seven related PyJWT advisories); refreshed
+  `uv.lock` accordingly.
+- Dropped the `@anthropic-ai/mcpb` dev dependency and its `node-forge` tree
+  (GHSA-86w9-cpqp-85rv, no upstream fix). The `.mcpb` archive is now zipped
+  directly with `fflate` (byte-identical output) and the manifest is validated
+  in CI against the official v0.4 JSON schema.
+
+### Changed
+- Dependabot no longer proposes `mcp` major-version bumps; the move to the mcp
+  2.x API is a deliberate migration.
+
 ## [0.1.6] - 2026-07-23
 
 ### Security

@@ -9,11 +9,15 @@ if (!command) {
 const expectedTools = [
   "create_blueprint",
   "delete_blueprint",
+  "export_blueprint_budget",
   "export_blueprint_image",
   "get_blueprint",
   "list_aws_accounts",
+  "list_azure_accounts",
   "list_blueprints",
+  "list_teams",
   "snapshot_aws",
+  "snapshot_azure",
   "update_blueprint",
   "whoami",
 ].sort();

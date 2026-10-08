@@ -4,10 +4,17 @@ These are intentionally partial — Cloudcraft's schema has 200+ node types and
 many service-specific fields. The TypedDicts below document the *shape* that
 create_blueprint / update_blueprint expect; callers can freely add extra
 service-specific keys on nodes.
+
+pydantic validates MCP tool arguments against these types and, by default,
+*drops* undeclared keys. Every type therefore opts into ``extra="allow"`` so
+``instanceType``, container ``nodes`` lists, colours, etc. reach Cloudcraft
+unchanged (issue #22).
 """
 from __future__ import annotations
 
 from typing import Any, Literal
+
+from pydantic import ConfigDict, with_config
 
 # pydantic 2.x refuses to introspect ``typing.TypedDict`` on Python < 3.12 when
 # it appears in an MCP tool signature (PydanticUserError "typed-dict-version").
@@ -16,8 +23,10 @@ from typing import Any, Literal
 from typing_extensions import TypedDict
 
 MapPos = tuple[float, float] | list[float]
+_PASSTHROUGH = ConfigDict(extra="allow")
 
 
+@with_config(_PASSTHROUGH)
 class BlueprintNode(TypedDict, total=False):
     """A single AWS resource node in a Cloudcraft blueprint."""
 
@@ -43,8 +52,12 @@ BlueprintEdge = TypedDict(
     },
     total=False,
 )
+# Functional TypedDicts cannot carry a decorator; mypy also rejects
+# ``BlueprintEdge.__pydantic_config__ = ...`` on a TypedDict type.
+with_config(_PASSTHROUGH)(BlueprintEdge)
 
 
+@with_config(_PASSTHROUGH)
 class BlueprintGroup(TypedDict, total=False):
     """A grouping (e.g. Auto Scaling group) around a set of node ids."""
 
@@ -57,6 +70,7 @@ class BlueprintGroup(TypedDict, total=False):
     mapSize: list[float]
 
 
+@with_config(_PASSTHROUGH)
 class BlueprintSurface(TypedDict, total=False):
     """Background shape — zone or free-form area."""
 
@@ -67,6 +81,7 @@ class BlueprintSurface(TypedDict, total=False):
     mapSize: list[float]
 
 
+@with_config(_PASSTHROUGH)
 class BlueprintText(TypedDict, total=False):
     """Isometric text label."""
 
@@ -79,6 +94,7 @@ class BlueprintText(TypedDict, total=False):
     isometric: str
 
 
+@with_config(_PASSTHROUGH)
 class BlueprintLiveOptions(TypedDict, total=False):
     autoLabel: bool
     autoConnect: bool
@@ -90,6 +106,7 @@ class BlueprintLiveOptions(TypedDict, total=False):
     updateNodeOnSelect: bool
 
 
+@with_config(_PASSTHROUGH)
 class BlueprintData(TypedDict, total=False):
     """Top-level blueprint data payload sent to POST/PUT /blueprint."""
 

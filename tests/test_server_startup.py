@@ -74,6 +74,8 @@ def test_tool_annotations_describe_mutation_risk(
         "list_blueprints",
         "get_blueprint",
         "list_aws_accounts",
+        "list_azure_accounts",
+        "list_teams",
     ):
         assert annotations[name].readOnlyHint is True
         assert annotations[name].openWorldHint is True
@@ -93,9 +95,13 @@ def test_tool_annotations_describe_mutation_risk(
     assert annotations["export_blueprint_image"].readOnlyHint is False
     assert annotations["export_blueprint_image"].destructiveHint is True
 
-    assert annotations["snapshot_aws"].readOnlyHint is False
-    assert annotations["snapshot_aws"].destructiveHint is False
-    assert annotations["snapshot_aws"].idempotentHint is True
+    assert annotations["export_blueprint_budget"].readOnlyHint is False
+    assert annotations["export_blueprint_budget"].destructiveHint is True
+
+    for name in ("snapshot_aws", "snapshot_azure"):
+        assert annotations[name].readOnlyHint is False
+        assert annotations[name].destructiveHint is False
+        assert annotations[name].idempotentHint is True
 
 
 @pytest.mark.unit

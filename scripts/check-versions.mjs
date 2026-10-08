@@ -141,20 +141,9 @@ for (const requiredFile of [
   );
 }
 assert(
-  packageJson.devDependencies?.["@anthropic-ai/mcpb"] === "2.1.2" &&
-    packageLock.packages?.["node_modules/@anthropic-ai/mcpb"]?.version ===
-      "2.1.2",
-  "The MCPB CLI must stay exactly pinned to 2.1.2 in package and lock metadata.",
-);
-assert(
   packageJson.devDependencies?.fflate === "0.8.3" &&
     packageLock.packages?.["node_modules/fflate"]?.version === "0.8.3",
   "The deterministic ZIP implementation must stay exactly pinned to fflate 0.8.3.",
-);
-assert(
-  packageJson.overrides?.tmp === "0.2.7" &&
-    packageLock.packages?.["node_modules/tmp"]?.version === "0.2.7",
-  "The MCPB CLI's transitive tmp dependency must stay on patched 0.2.7.",
 );
 const lockedInstallScripts = Object.entries(packageLock.packages ?? {})
   .filter(([, metadata]) => metadata.hasInstallScript === true)

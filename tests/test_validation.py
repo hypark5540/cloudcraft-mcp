@@ -103,18 +103,20 @@ async def test_get_blueprint_rejects_traversal() -> None:
 async def test_snapshot_aws_rejects_bad_region() -> None:
     client = CloudcraftClient(api_key="test-key")
     with pytest.raises(ValueError):
-        await client.snapshot_aws(GOOD_UUID, "AP-NORTHEAST-2", "ec2")
+        await client.snapshot_aws(GOOD_UUID, "AP-NORTHEAST-2")
 
 
 @pytest.mark.unit
 @respx.mock
 async def test_valid_inputs_reach_the_network() -> None:
-    """Sanity: good UUID/region/service actually dispatches a request."""
+    """Sanity: good UUID/region/exclude actually dispatches a request."""
     client = CloudcraftClient(api_key="test-key")
     route = respx.get(
-        f"https://api.cloudcraft.co/aws/account/{GOOD_UUID}/snapshot/ap-northeast-2/ec2"
+        f"https://api.cloudcraft.co/aws/account/{GOOD_UUID}/ap-northeast-2/json"
     ).mock(return_value=httpx.Response(200, json={"ok": True}))
-    assert await client.snapshot_aws(GOOD_UUID, "ap-northeast-2", "ec2") == {"ok": True}
+    assert await client.snapshot_aws(GOOD_UUID, "ap-northeast-2", exclude=["ec2"]) == {
+        "ok": True
+    }
     assert route.called
 
 

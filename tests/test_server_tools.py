@@ -420,16 +420,16 @@ async def test_snapshot_aws_success(
     monkeypatch.setattr(
         server_module._client,
         "snapshot_aws",
-        AsyncMock(return_value={"service": "ec2", "count": 0}),
+        AsyncMock(return_value={"nodes": []}),
     )
-    result = await server_module.snapshot_aws(GOOD_UUID, "ap-northeast-2", "ec2")
-    assert result["service"] == "ec2"
+    result = await server_module.snapshot_aws(GOOD_UUID, "ap-northeast-2")
+    assert result == {"nodes": []}
 
 
 @pytest.mark.unit
 async def test_snapshot_aws_rejects_bad_region(server_module) -> None:
     with pytest.raises(RuntimeError, match="region must look like"):
-        await server_module.snapshot_aws(GOOD_UUID, "AP-NORTHEAST-2", "ec2")
+        await server_module.snapshot_aws(GOOD_UUID, "AP-NORTHEAST-2")
 
 
 @pytest.mark.unit
@@ -442,7 +442,62 @@ async def test_snapshot_aws_wraps_cloudcraft_error(
         AsyncMock(side_effect=_fake_error(500, "aws unreachable")),
     )
     with pytest.raises(RuntimeError, match="500"):
-        await server_module.snapshot_aws(GOOD_UUID, "us-east-1", "s3")
+        await server_module.snapshot_aws(GOOD_UUID, "us-east-1")
+
+
+@pytest.mark.unit
+async def test_snapshot_azure_success(
+    server_module, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        server_module._client, "snapshot_azure", AsyncMock(return_value={"nodes": []})
+    )
+    assert await server_module.snapshot_azure(GOOD_UUID, "eastus") == {"nodes": []}
+
+
+@pytest.mark.unit
+async def test_list_teams_success(server_module, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        server_module._client, "list_teams", AsyncMock(return_value={"teams": []})
+    )
+    assert await server_module.list_teams() == {"teams": []}
+
+
+# ---- export_blueprint_budget -------------------------------------------------
+
+
+@pytest.mark.unit
+async def test_export_blueprint_budget_writes_file(
+    server_module, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(
+        server_module._client,
+        "export_blueprint_budget",
+        AsyncMock(return_value=b"service,cost\n"),
+    )
+    out = await server_module.export_blueprint_budget(GOOD_UUID, "csv")
+    assert out == {"path": str(tmp_path / f"cloudcraft_{GOOD_UUID}_budget.csv"), "bytes": 13, "format": "csv"}
+    assert Path(out["path"]).read_bytes() == b"service,cost\n"
+
+
+# ---- issue #22: FastMCP argument validation must keep node extras -----------
+
+
+@pytest.mark.unit
+async def test_create_blueprint_tool_keeps_service_specific_fields(
+    server_module, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    create = AsyncMock(return_value={"id": GOOD_UUID})
+    monkeypatch.setattr(server_module._client, "create_blueprint", create)
+    node = {"id": "n1", "type": "subnet", "instanceType": "g4dn", "nodes": ["c1"]}
+
+    await server_module.mcp.call_tool(
+        "create_blueprint", {"name": "x", "data": {"nodes": [node], "shareDocs": False}}
+    )
+
+    sent = create.call_args.args[0]
+    assert sent["name"] == "x"
+    assert sent["nodes"][0] == node
 
 
 # ---- startup error paths ---------------------------------------------------
