@@ -78,7 +78,7 @@ jobs:
         run: |
           mkdir -p release-artifacts/npm release-artifacts/pypi release-artifacts/mcpb
           uv build --wheel --sdist --no-sources --out-dir release-artifacts/pypi
-          uvx --from twine==6.2.0 twine check release-artifacts/pypi/*
+          uvx --from twine==7.0.0 twine check release-artifacts/pypi/*
           npm run build:npm
           npm run smoke
           npm run build:mcpb

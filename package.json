@@ -1,6 +1,6 @@
 {
   "name": "@hypark5540/cloudcraft-mcp",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Unofficial Model Context Protocol server for Cloudcraft architecture blueprints",
   "type": "module",
   "mcpName": "io.github.hypark5540/cloudcraft-mcp",

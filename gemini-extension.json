@@ -1,11 +1,11 @@
 {
   "name": "cloudcraft-mcp",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Unofficial Cloudcraft blueprint access through the Model Context Protocol",
   "mcpServers": {
     "cloudcraft": {
       "command": "npx",
-      "args": ["-y", "@hypark5540/cloudcraft-mcp@0.1.6"],
+      "args": ["-y", "@hypark5540/cloudcraft-mcp@0.1.7"],
       "env": {
         "CLOUDCRAFT_API_KEY": "${CLOUDCRAFT_API_KEY}",
         "CLOUDCRAFT_BASE_URL": "${CLOUDCRAFT_BASE_URL:-https://api.cloudcraft.co}",

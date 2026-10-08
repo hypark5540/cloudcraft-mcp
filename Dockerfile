@@ -22,7 +22,7 @@ RUN uv sync --locked --no-dev --no-editable \
 
 FROM ${PYTHON_IMAGE} AS runtime
 
-ARG VERSION=0.1.6
+ARG VERSION=0.1.7
 ARG REVISION=unknown
 
 LABEL org.opencontainers.image.title="Cloudcraft MCP" \

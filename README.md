@@ -46,10 +46,10 @@ Use an immutable version in client configuration so upgrades are deliberate.
 
 | Channel | Command |
 | ------- | ------- |
-| PyPI / uvx | `uvx --from cloudcraft-mcp==0.1.6 cloudcraft-mcp` |
-| pipx | `pipx run --spec cloudcraft-mcp==0.1.6 cloudcraft-mcp` |
-| npm / npx | `npx -y @hypark5540/cloudcraft-mcp@0.1.6` |
-| Docker / GHCR | `docker run --rm -i -e CLOUDCRAFT_API_KEY ghcr.io/hypark5540/cloudcraft-mcp:0.1.6` |
+| PyPI / uvx | `uvx --from cloudcraft-mcp==0.1.7 cloudcraft-mcp` |
+| pipx | `pipx run --spec cloudcraft-mcp==0.1.7 cloudcraft-mcp` |
+| npm / npx | `npx -y @hypark5540/cloudcraft-mcp@0.1.7` |
+| Docker / GHCR | `docker run --rm -i -e CLOUDCRAFT_API_KEY ghcr.io/hypark5540/cloudcraft-mcp:0.1.7` |
 | Claude Desktop | Download `cloudcraft-mcp.mcpb` from the matching GitHub release |
 
 `uvx` is delivered by the PyPI package; there is no separate uvx registry.
@@ -82,7 +82,7 @@ when available; the literal below is only a portable example.
         "run",
         "--isolated",
         "--from",
-        "cloudcraft-mcp==0.1.6",
+        "cloudcraft-mcp==0.1.7",
         "cloudcraft-mcp"
       ],
       "env": {
