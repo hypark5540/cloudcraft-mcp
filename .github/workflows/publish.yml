@@ -92,6 +92,9 @@ jobs:
           uvx --from check-jsonschema==0.37.4 check-jsonschema \
             --schemafile https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json \
             server.json
+          uvx --from check-jsonschema==0.37.4 check-jsonschema \
+            --schemafile https://raw.githubusercontent.com/modelcontextprotocol/mcpb/main/schemas/mcpb-manifest-v0.4.schema.json \
+            mcpb/manifest.json
           VERSION="${GITHUB_REF_NAME#v}"
           PYPI_WHEEL="release-artifacts/pypi/cloudcraft_mcp-$VERSION-py3-none-any.whl"
           tar -xOzf release-artifacts/npm/*.tgz \

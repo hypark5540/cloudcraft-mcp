@@ -1,20 +1,9 @@
-import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import {
-  chmod,
-  copyFile,
-  mkdir,
-  mkdtemp,
-  readFile,
-  rename,
-  rm,
-  writeFile,
-} from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { chmod, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { unzipSync, zipSync } from "fflate";
+import { zipSync } from "fflate";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const packageJson = JSON.parse(
@@ -66,68 +55,21 @@ function parseOutputArgument(args) {
   throw new Error("Usage: node scripts/build-mcpb.mjs [--output <file.mcpb>]");
 }
 
-function run(command, args) {
-  return new Promise((resolvePromise, reject) => {
-    const child = spawn(command, args, {
-      cwd: root,
-      stdio: "inherit",
-      windowsHide: true,
-    });
-    child.once("error", reject);
-    child.once("exit", (code, signal) => {
-      if (code === 0) {
-        resolvePromise();
-        return;
-      }
-      reject(
-        new Error(
-          `${command} ${args.join(" ")} failed (${signal ?? `code ${String(code)}`}).`,
-        ),
-      );
-    });
-  });
-}
-
-async function stageBundle(stageDirectory) {
-  for (const [archivePath, entry] of sourceEntries) {
-    const destination = resolve(stageDirectory, archivePath);
-    await mkdir(dirname(destination), { recursive: true });
-    await copyFile(resolve(root, entry.source), destination);
-    await chmod(destination, entry.mode);
-  }
-}
-
-function assertCandidateEntries(entries) {
-  const actual = Object.keys(entries).sort();
-  const expected = [...sourceEntries.keys()].sort();
-  if (
-    actual.length !== expected.length ||
-    actual.some((entry, index) => entry !== expected[index])
-  ) {
-    throw new Error(
-      `Unexpected MCPB contents: ${actual.join(", ")} (expected ${expected.join(", ")}).`,
-    );
-  }
-}
-
-function normalizeCandidate(candidate) {
-  const unpacked = unzipSync(candidate);
-  assertCandidateEntries(unpacked);
-
-  const normalized = {};
+// The MCPB format is a plain ZIP with manifest.json at the root. Building it
+// directly with fflate keeps the archive byte-for-byte reproducible and drops
+// the @anthropic-ai/mcpb CLI (and its node-forge dependency tree) for a `pack`
+// step whose output was re-zipped here anyway. CI validates mcpb/manifest.json
+// against the official v0.4 JSON schema with check-jsonschema.
+async function buildArchive() {
+  const entries = {};
   for (const archivePath of [...sourceEntries.keys()].sort()) {
-    const { mode } = sourceEntries.get(archivePath);
-    normalized[archivePath] = [
-      unpacked[archivePath],
-      {
-        level: 9,
-        mtime: fixedZipDate,
-        os: 3,
-        attrs: mode << 16,
-      },
+    const { source, mode } = sourceEntries.get(archivePath);
+    entries[archivePath] = [
+      new Uint8Array(await readFile(resolve(root, source))),
+      { level: 9, mtime: fixedZipDate, os: 3, attrs: mode << 16 },
     ];
   }
-  return zipSync(normalized, { level: 9, mtime: fixedZipDate });
+  return zipSync(entries, { level: 9, mtime: fixedZipDate });
 }
 
 const output = parseOutputArgument(process.argv.slice(2));
@@ -140,38 +82,20 @@ if (manifest.version !== packageJson.version) {
   );
 }
 
-const temporaryRoot = await mkdtemp(resolve(tmpdir(), "cloudcraft-mcp-mcpb-"));
-const stageDirectory = resolve(temporaryRoot, "stage");
-const candidatePath = resolve(temporaryRoot, "candidate.mcpb");
 const temporaryOutput = `${output}.${process.pid}.tmp`;
-const mcpbCli = resolve(
-  root,
-  "node_modules/@anthropic-ai/mcpb/dist/cli/cli.js",
-);
 
 try {
-  await mkdir(stageDirectory, { recursive: true });
-  await stageBundle(stageDirectory);
-  await run(process.execPath, [mcpbCli, "validate", stageDirectory]);
-  await run(process.execPath, [
-    mcpbCli,
-    "pack",
-    stageDirectory,
-    candidatePath,
-  ]);
-
-  const normalized = normalizeCandidate(await readFile(candidatePath));
+  const archive = await buildArchive();
   await mkdir(dirname(output), { recursive: true });
-  await writeFile(temporaryOutput, normalized, { mode: 0o644 });
+  await writeFile(temporaryOutput, archive, { mode: 0o644 });
   await rm(output, { force: true });
   await rename(temporaryOutput, output);
   await chmod(output, 0o644);
 
-  const digest = createHash("sha256").update(normalized).digest("hex");
+  const digest = createHash("sha256").update(archive).digest("hex");
   console.log(
     `Deterministic MCPB written: ${relative(root, output)} (sha256 ${digest})`,
   );
 } finally {
   await rm(temporaryOutput, { force: true });
-  await rm(temporaryRoot, { recursive: true, force: true });
 }

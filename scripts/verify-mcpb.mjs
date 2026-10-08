@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -158,10 +158,6 @@ const secondBuild = resolve(temporaryRoot, "second.mcpb");
 const unpackDirectory = resolve(temporaryRoot, "unpacked");
 const buildScript = resolve(root, "scripts/build-mcpb.mjs");
 const smokeScript = resolve(root, "scripts/smoke-stdio.mjs");
-const mcpbCli = resolve(
-  root,
-  "node_modules/@anthropic-ai/mcpb/dist/cli/cli.js",
-);
 const uv = process.env.CLOUDCRAFT_MCP_UV || "uv";
 
 try {
@@ -183,17 +179,15 @@ try {
   );
   await assertArchiveContents(publishedContents);
 
-  await run(process.execPath, [
-    mcpbCli,
-    "unpack",
-    artifact,
-    unpackDirectory,
-  ]);
-  await run(process.execPath, [
-    mcpbCli,
-    "validate",
-    resolve(unpackDirectory, "manifest.json"),
-  ]);
+  // Entry names were checked against expectedEntries above, so none can
+  // escape unpackDirectory.
+  for (const [archivePath, contents] of Object.entries(
+    unzipSync(publishedContents),
+  )) {
+    const destination = resolve(unpackDirectory, archivePath);
+    await mkdir(dirname(destination), { recursive: true });
+    await writeFile(destination, contents);
+  }
   await run(process.execPath, [
     smokeScript,
     uv,

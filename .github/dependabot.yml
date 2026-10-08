@@ -9,6 +9,11 @@ updates:
       time: "03:00"
       timezone: Asia/Seoul
     open-pull-requests-limit: 10
+    ignore:
+      # The server is built on the FastMCP 1.x decorator API. Moving to mcp 2.x
+      # is a deliberate migration, not a routine dependency bump.
+      - dependency-name: mcp
+        update-types: ["version-update:semver-major"]
     groups:
       python-runtime:
         dependency-type: production

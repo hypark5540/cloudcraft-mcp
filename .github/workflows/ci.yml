@@ -142,12 +142,14 @@ jobs:
           uv build --wheel --sdist --no-sources --out-dir dist
           uvx --from twine==6.2.0 twine check dist/*
           npm pack --pack-destination "$RUNNER_TEMP/npm-package"
-      - name: Validate MCP Registry metadata
-        run: >-
-          uvx --from check-jsonschema==0.37.4 check-jsonschema
-          --schemafile
-          https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json
-          server.json
+      - name: Validate MCP Registry and MCPB metadata
+        run: |
+          uvx --from check-jsonschema==0.37.4 check-jsonschema \
+            --schemafile https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json \
+            server.json
+          uvx --from check-jsonschema==0.37.4 check-jsonschema \
+            --schemafile https://raw.githubusercontent.com/modelcontextprotocol/mcpb/main/schemas/mcpb-manifest-v0.4.schema.json \
+            mcpb/manifest.json
       - name: Verify one wheel across PyPI and npm
         run: |
           VERSION="$(node -p "require('./package.json').version")"
