@@ -10,6 +10,7 @@ import os
 import re
 import sys
 import tempfile
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any
 
@@ -130,7 +131,9 @@ def _format_error(exc: CloudcraftError) -> str:
     return f"Cloudcraft API error ({exc.status}): {body}{suffix}"
 
 
-def _resolve_export_path(blueprint_id: str, ext: str, output_path: str | None) -> Path:
+def _resolve_export_path(
+    blueprint_id: str, ext: str, output_path: str | None, *, stem_suffix: str = ""
+) -> Path:
     """Return a safe absolute path inside _EXPORT_ROOT for writing the export.
 
     Fix #1: Both the caller-supplied ``output_path`` and the default path
@@ -142,7 +145,7 @@ def _resolve_export_path(blueprint_id: str, ext: str, output_path: str | None) -
     if output_path is not None:
         candidate = Path(output_path).expanduser().resolve()
     else:
-        candidate = (_EXPORT_ROOT / f"cloudcraft_{blueprint_id}.{ext}").resolve()
+        candidate = (_EXPORT_ROOT / f"cloudcraft_{blueprint_id}{stem_suffix}.{ext}").resolve()
     # strict containment: candidate must be _EXPORT_ROOT itself or below it.
     if candidate != _EXPORT_ROOT and _EXPORT_ROOT not in candidate.parents:
         raise RuntimeError(
@@ -193,6 +196,38 @@ def _write_export_file(target: Path, content: bytes, *, overwrite: bool) -> Path
         final_target.unlink(missing_ok=True)
         raise
     return final_target
+
+
+async def _save_export(
+    blueprint_id: str,
+    ext: str,
+    output_path: str | None,
+    overwrite: bool,
+    fetch: Callable[[], Awaitable[bytes]],
+    *,
+    stem_suffix: str = "",
+) -> dict[str, Any]:
+    """Resolve + validate the destination BEFORE hitting the network, then write.
+
+    A bad path fails fast without wasting a Cloudcraft quota / export credit.
+    """
+    try:
+        target = _resolve_export_path(blueprint_id, ext, output_path, stem_suffix=stem_suffix)
+    except ValueError as exc:
+        raise RuntimeError(str(exc)) from exc
+    if target.exists() and not overwrite:
+        raise RuntimeError(
+            f"{target} already exists. Pass overwrite=True to replace it."
+        )
+    try:
+        content = await fetch()
+    except CloudcraftError as exc:
+        raise RuntimeError(_format_error(exc)) from None
+    except ValueError as exc:
+        raise RuntimeError(str(exc)) from exc
+
+    target = _write_export_file(target, content, overwrite=overwrite)
+    return {"path": str(target), "bytes": len(content)}
 
 
 def _enabled(name: str) -> bool:
@@ -362,27 +397,67 @@ async def export_blueprint_image(
     """
     fmt = format.lower()
     ext = "xml" if fmt == "mxgraph" else fmt
-    # Resolve + validate destination BEFORE hitting the network so a bad path
-    # fails fast without wasting a Cloudcraft quota / export credit.
+    result = await _save_export(
+        blueprint_id,
+        ext,
+        output_path,
+        overwrite,
+        lambda: _client.export_blueprint(blueprint_id, fmt, scale=scale, transparent=transparent),
+    )
+    return {**result, "format": fmt}
+
+
+@mcp.tool(annotations=_EXPORT_IMAGE_TOOL)
+async def export_blueprint_budget(
+    blueprint_id: str,
+    format: str = "csv",
+    output_path: str | None = None,
+    currency: str | None = None,
+    period: str | None = None,
+    rate: str | None = None,
+    overwrite: bool = False,
+) -> dict[str, Any]:
+    """Export a blueprint's cost estimate (budget) to a CSV or XLSX file on disk.
+
+    Same write sandbox as :func:`export_blueprint_image`.
+
+    Args:
+        blueprint_id: Blueprint UUID.
+        format: ``csv`` or ``xlsx``. Default ``csv``.
+        output_path: Absolute path under the export directory. Default:
+            ``<export_dir>/cloudcraft_<uuid>_budget.<ext>``.
+        currency: ISO 4217 code — ``USD`` (default), ``AUD``, ``CHF``, ``EUR``,
+            ``GBP``, ``HKD``, ``JPY``, ``NOK``, ``NZD``, ``SEK``, ``ZAR``.
+        period: ``h`` hourly, ``d`` daily, ``w`` weekly, ``m`` monthly
+            (default), ``y`` yearly.
+        rate: ``effective`` (default, includes upfront fees) or ``stated``.
+        overwrite: Set True to replace an existing file.
+
+    Returns:
+        ``{"path": <saved_path>, "bytes": <size>, "format": <fmt>}``
+    """
+    fmt = format.lower()
+    result = await _save_export(
+        blueprint_id,
+        fmt,
+        output_path,
+        overwrite,
+        lambda: _client.export_blueprint_budget(
+            blueprint_id, fmt, currency=currency, period=period, rate=rate
+        ),
+        stem_suffix="_budget",
+    )
+    return {**result, "format": fmt}
+
+
+# ---- teams -------------------------------------------------------------------
+@mcp.tool(annotations=_READ_ONLY_EXTERNAL_TOOL)
+async def list_teams() -> dict[str, Any]:
+    """List the teams linked to the Cloudcraft account (id, name, members)."""
     try:
-        target = _resolve_export_path(blueprint_id, ext, output_path)
-    except ValueError as exc:
-        raise RuntimeError(str(exc)) from exc
-    if target.exists() and not overwrite:
-        raise RuntimeError(
-            f"{target} already exists. Pass overwrite=True to replace it."
-        )
-    try:
-        content = await _client.export_blueprint(
-            blueprint_id, fmt, scale=scale, transparent=transparent
-        )
+        return await _client.list_teams()
     except CloudcraftError as exc:
         raise RuntimeError(_format_error(exc)) from None
-    except ValueError as exc:
-        raise RuntimeError(str(exc)) from exc
-
-    target = _write_export_file(target, content, overwrite=overwrite)
-    return {"path": str(target), "bytes": len(content), "format": fmt}
 
 
 # ---- aws live-scan ----------------------------------------------------------
@@ -395,21 +470,63 @@ async def list_aws_accounts() -> dict[str, Any]:
         raise RuntimeError(_format_error(exc)) from None
 
 
-@mcp.tool(annotations=_SNAPSHOT_TOOL)
-async def snapshot_aws(account_id: str, region: str, service: str) -> dict[str, Any]:
-    """Take a live-scan snapshot of one AWS service via Cloudcraft.
+_SNAPSHOT_DOC = """
+    Cloudcraft long-polls for up to 120 s. If the scan takes longer the result
+    is ``{"code": "STILL_PROCESSING", "retry": true, ...}``; call again with the
+    same arguments to receive the finished blueprint JSON.
 
     Args:
-        account_id: Cloudcraft AWS account id (from :func:`list_aws_accounts`).
-        region: AWS region code, e.g. ``ap-northeast-2``.
-        service: Service to snapshot, e.g. ``ec2``, ``s3``, ``rds``, ``lambda``, ``vpc``.
+        account_id: Cloudcraft account id (from the matching ``list_*_accounts``).
+        region: Region code, e.g. ``ap-northeast-2`` (AWS) or ``eastus`` (Azure).
+        filter: Live-tab filter expression, e.g. ``env=dev OR env=test``.
+        exclude: Component types to leave out, e.g. ``["ec2", "sg"]``.
     """
+
+
+@mcp.tool(annotations=_SNAPSHOT_TOOL)
+async def snapshot_aws(
+    account_id: str,
+    region: str,
+    filter: str | None = None,
+    exclude: list[str] | None = None,
+) -> dict[str, Any]:
+    """Scan one AWS region into a blueprint JSON via Cloudcraft live-scan."""
     try:
-        return await _client.snapshot_aws(account_id, region, service)
+        return await _client.snapshot_aws(account_id, region, filter=filter, exclude=exclude)
     except CloudcraftError as exc:
         raise RuntimeError(_format_error(exc)) from None
     except ValueError as exc:
         raise RuntimeError(str(exc)) from exc
+
+
+# ---- azure live-scan --------------------------------------------------------
+@mcp.tool(annotations=_READ_ONLY_EXTERNAL_TOOL)
+async def list_azure_accounts() -> dict[str, Any]:
+    """List Azure accounts registered with Cloudcraft for live-scan snapshots."""
+    try:
+        return await _client.list_azure_accounts()
+    except CloudcraftError as exc:
+        raise RuntimeError(_format_error(exc)) from None
+
+
+@mcp.tool(annotations=_SNAPSHOT_TOOL)
+async def snapshot_azure(
+    account_id: str,
+    region: str,
+    filter: str | None = None,
+    exclude: list[str] | None = None,
+) -> dict[str, Any]:
+    """Scan one Azure region into a blueprint JSON via Cloudcraft live-scan."""
+    try:
+        return await _client.snapshot_azure(account_id, region, filter=filter, exclude=exclude)
+    except CloudcraftError as exc:
+        raise RuntimeError(_format_error(exc)) from None
+    except ValueError as exc:
+        raise RuntimeError(str(exc)) from exc
+
+
+snapshot_aws.__doc__ = (snapshot_aws.__doc__ or "") + _SNAPSHOT_DOC
+snapshot_azure.__doc__ = (snapshot_azure.__doc__ or "") + _SNAPSHOT_DOC
 
 
 def main() -> None:

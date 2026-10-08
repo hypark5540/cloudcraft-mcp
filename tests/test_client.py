@@ -4,6 +4,9 @@ Uses respx to mock httpx — no real network calls, no API key needed.
 """
 from __future__ import annotations
 
+import gzip
+import json
+
 import httpx
 import pytest
 import respx
@@ -218,3 +221,137 @@ async def test_list_aws_accounts(client: CloudcraftClient) -> None:
         return_value=httpx.Response(200, json={"accounts": []})
     )
     assert await client.list_aws_accounts() == {"accounts": []}
+
+
+# ---- regressions for GitHub issues #20 / #21 ---------------------------------
+
+
+@pytest.mark.unit
+@respx.mock
+async def test_gzip_response_is_decoded_only_once(client: CloudcraftClient) -> None:
+    """Issue #20: the buffered copy must not re-run the Content-Encoding decoder."""
+    body = gzip.compress(json.dumps({"ok": True}).encode())
+    respx.get("https://api.cloudcraft.co/user/me").mock(
+        return_value=httpx.Response(
+            200,
+            content=body,
+            headers={
+                "Content-Type": "application/json",
+                "Content-Encoding": "gzip",
+                "Content-Length": str(len(body)),
+            },
+        )
+    )
+    assert await client.whoami() == {"ok": True}
+
+
+@pytest.mark.unit
+@respx.mock
+async def test_update_blueprint_accepts_204_no_content(client: CloudcraftClient) -> None:
+    """Issue #21: Cloudcraft answers a successful PUT with 204 and an empty body."""
+    respx.put(f"https://api.cloudcraft.co/blueprint/{GOOD_UUID}").mock(
+        return_value=httpx.Response(204)
+    )
+    assert await client.update_blueprint(GOOD_UUID, {"nodes": []}) == {
+        "id": GOOD_UUID,
+        "updated": True,
+    }
+
+
+@pytest.mark.unit
+@respx.mock
+async def test_rate_limit_error_surfaces_retry_after(client: CloudcraftClient) -> None:
+    respx.get("https://api.cloudcraft.co/user/me").mock(
+        return_value=httpx.Response(429, headers={"Retry-After": "7"})
+    )
+    with pytest.raises(CloudcraftError) as exc_info:
+        await client.whoami()
+    assert exc_info.value.status == 429
+    assert "7" in exc_info.value.body
+
+
+# ---- endpoint paths verified against docs.datadoghq.com/cloudcraft/api -------
+
+
+@pytest.mark.unit
+@respx.mock
+async def test_export_blueprint_mxgraph_uses_api_spelling(client: CloudcraftClient) -> None:
+    route = respx.get(f"https://api.cloudcraft.co/blueprint/{GOOD_UUID}/mxGraph").mock(
+        return_value=httpx.Response(200, content=b"<mxGraphModel/>")
+    )
+    assert await client.export_blueprint(GOOD_UUID, "mxgraph") == b"<mxGraphModel/>"
+    assert route.called
+
+
+@pytest.mark.unit
+@respx.mock
+async def test_snapshot_aws_uses_documented_path_and_params(client: CloudcraftClient) -> None:
+    route = respx.get(
+        f"https://api.cloudcraft.co/aws/account/{GOOD_UUID}/ap-northeast-2/json"
+    ).mock(return_value=httpx.Response(200, json={"nodes": []}))
+    result = await client.snapshot_aws(
+        GOOD_UUID, "ap-northeast-2", filter="env=dev", exclude=["ec2", "sg"]
+    )
+    assert result == {"nodes": []}
+    params = route.calls.last.request.url.params
+    assert params["filter"] == "env=dev"
+    assert params["exclude"] == "ec2,sg"
+
+
+@pytest.mark.unit
+async def test_snapshot_aws_rejects_bad_exclude_entry(client: CloudcraftClient) -> None:
+    with pytest.raises(ValueError, match="service must be"):
+        await client.snapshot_aws(GOOD_UUID, "us-east-1", exclude=["../etc"])
+
+
+@pytest.mark.unit
+@respx.mock
+async def test_snapshot_azure_uses_documented_path(client: CloudcraftClient) -> None:
+    respx.get(f"https://api.cloudcraft.co/azure/account/{GOOD_UUID}/eastus/json").mock(
+        return_value=httpx.Response(200, json={"nodes": []})
+    )
+    assert await client.snapshot_azure(GOOD_UUID, "eastus") == {"nodes": []}
+
+
+@pytest.mark.unit
+async def test_snapshot_azure_rejects_bad_region(client: CloudcraftClient) -> None:
+    with pytest.raises(ValueError, match="region"):
+        await client.snapshot_azure(GOOD_UUID, "East US")
+
+
+@pytest.mark.unit
+@respx.mock
+async def test_export_blueprint_budget(client: CloudcraftClient) -> None:
+    route = respx.get(f"https://api.cloudcraft.co/blueprint/{GOOD_UUID}/budget/csv").mock(
+        return_value=httpx.Response(200, content=b"service,cost\n")
+    )
+    content = await client.export_blueprint_budget(
+        GOOD_UUID, "csv", currency="EUR", period="y", rate="stated"
+    )
+    assert content == b"service,cost\n"
+    params = route.calls.last.request.url.params
+    assert (params["currency"], params["period"], params["rate"]) == ("EUR", "y", "stated")
+
+
+@pytest.mark.unit
+async def test_export_blueprint_budget_rejects_bad_format(client: CloudcraftClient) -> None:
+    with pytest.raises(ValueError, match="unsupported format"):
+        await client.export_blueprint_budget(GOOD_UUID, "pdf")
+
+
+@pytest.mark.unit
+@respx.mock
+async def test_list_teams_wraps_bare_array(client: CloudcraftClient) -> None:
+    respx.get("https://api.cloudcraft.co/team").mock(
+        return_value=httpx.Response(200, json=[{"id": "t1"}])
+    )
+    assert await client.list_teams() == {"teams": [{"id": "t1"}]}
+
+
+@pytest.mark.unit
+@respx.mock
+async def test_list_azure_accounts(client: CloudcraftClient) -> None:
+    respx.get("https://api.cloudcraft.co/azure/account").mock(
+        return_value=httpx.Response(200, json={"accounts": []})
+    )
+    assert await client.list_azure_accounts() == {"accounts": []}
