@@ -8,13 +8,13 @@
     "url": "https://github.com/hypark5540/cloudcraft-mcp",
     "source": "github"
   },
-  "version": "0.1.6",
+  "version": "0.1.7",
   "packages": [
     {
       "registryType": "npm",
       "registryBaseUrl": "https://registry.npmjs.org",
       "identifier": "@hypark5540/cloudcraft-mcp",
-      "version": "0.1.6",
+      "version": "0.1.7",
       "runtimeHint": "npx",
       "transport": {
         "type": "stdio"
@@ -65,7 +65,7 @@
       "registryType": "pypi",
       "registryBaseUrl": "https://pypi.org",
       "identifier": "cloudcraft-mcp",
-      "version": "0.1.6",
+      "version": "0.1.7",
       "runtimeHint": "uvx",
       "transport": {
         "type": "stdio"
@@ -114,7 +114,7 @@
     },
     {
       "registryType": "oci",
-      "identifier": "ghcr.io/hypark5540/cloudcraft-mcp:0.1.6",
+      "identifier": "ghcr.io/hypark5540/cloudcraft-mcp:0.1.7",
       "runtimeHint": "docker",
       "transport": {
         "type": "stdio"

@@ -1,13 +1,13 @@
 # Release guide
 
-Cloudcraft MCP `0.1.6`은 하나의 Python 구현을 다음 공개 형식으로 배포합니다.
+Cloudcraft MCP `0.1.7`은 하나의 Python 구현을 다음 공개 형식으로 배포합니다.
 
-- PyPI: `cloudcraft-mcp==0.1.6`
-- npm: `@hypark5540/cloudcraft-mcp@0.1.6`
-- OCI/GHCR: `ghcr.io/hypark5540/cloudcraft-mcp:0.1.6`
+- PyPI: `cloudcraft-mcp==0.1.7`
+- npm: `@hypark5540/cloudcraft-mcp@0.1.7`
+- OCI/GHCR: `ghcr.io/hypark5540/cloudcraft-mcp:0.1.7`
 - MCP Registry: `io.github.hypark5540/cloudcraft-mcp`
-- GitHub Release: Claude Desktop용 `cloudcraft-mcp-0.1.6.mcpb`와 checksum
-- Gemini CLI: `v0.1.6` 태그의 `gemini-extension.json`
+- GitHub Release: Claude Desktop용 `cloudcraft-mcp-0.1.7.mcpb`와 checksum
+- Gemini CLI: `v0.1.7` 태그의 `gemini-extension.json`
 
 npm 패키지는 별도 JavaScript 서버가 아니라 빌드된 Python wheel과 `uv` 실행기를
 담습니다. PyPI wheel, npm에 포함된 wheel, MCPB에 포함된 서버가 같은 소스와 버전을
@@ -63,12 +63,12 @@ PAT를 넣지 않습니다.
 
 MCP Registry 이름 `io.github.hypark5540/cloudcraft-mcp`의 GitHub 소유권 검증과
 publisher 로그인을 최초 릴리스 전에 완료합니다. `server.json`에 선언된 npm, PyPI,
-OCI 세 패키지가 모두 공개되고 정확한 `0.1.6` 버전을 제공한 뒤 Registry 항목을
+OCI 세 패키지가 모두 공개되고 정확한 `0.1.7` 버전을 제공한 뒤 Registry 항목을
 게시합니다.
 
 ## 버전 일치 항목
 
-태그를 만들기 전에 아래 위치가 모두 `0.1.6`인지 확인합니다.
+태그를 만들기 전에 아래 위치가 모두 `0.1.7`인지 확인합니다.
 
 - `pyproject.toml`, `uv.lock`, `src/cloudcraft_mcp/__init__.py`
 - `package.json`, lockfile, npm에 포함되는 wheel 이름
@@ -103,11 +103,11 @@ Docker가 있는 환경에서는 잠긴 Python base digest와 `uv.lock`만 사�
 
 ```bash
 docker build \
-  --build-arg VERSION=0.1.6 \
+  --build-arg VERSION=0.1.7 \
   --build-arg REVISION="$(git rev-parse HEAD)" \
-  -t ghcr.io/hypark5540/cloudcraft-mcp:0.1.6 .
+  -t ghcr.io/hypark5540/cloudcraft-mcp:0.1.7 .
 
-docker run --rm ghcr.io/hypark5540/cloudcraft-mcp:0.1.6 --version
+docker run --rm ghcr.io/hypark5540/cloudcraft-mcp:0.1.7 --version
 ```
 
 Docker build context에는 `.env`, registry 설정, private key가 포함되지 않으며 API
@@ -119,8 +119,8 @@ Docker build context에는 `.env`, registry 설정, private key가 포함되지 
 검증된 변경을 커밋한 뒤 이동하지 않을 annotated tag를 만들고 푸시합니다.
 
 ```bash
-git tag -a v0.1.6 -m "cloudcraft-mcp 0.1.6"
-git push origin v0.1.6
+git tag -a v0.1.7 -m "cloudcraft-mcp 0.1.7"
+git push origin v0.1.7
 ```
 
 릴리스 workflow는 태그의 소스를 한 번 checkout한 뒤 다음 순서로 동작해야 합니다.
@@ -142,13 +142,13 @@ git push origin v0.1.6
 새 셸과 빈 도구 캐시에서 공개 아티팩트를 직접 확인합니다.
 
 ```bash
-uvx --refresh --from cloudcraft-mcp==0.1.6 cloudcraft-mcp --version
-npx --yes @hypark5540/cloudcraft-mcp@0.1.6 --version
-docker pull ghcr.io/hypark5540/cloudcraft-mcp:0.1.6
-docker run --rm ghcr.io/hypark5540/cloudcraft-mcp:0.1.6 --version
+uvx --refresh --from cloudcraft-mcp==0.1.7 cloudcraft-mcp --version
+npx --yes @hypark5540/cloudcraft-mcp@0.1.7 --version
+docker pull ghcr.io/hypark5540/cloudcraft-mcp:0.1.7
+docker run --rm ghcr.io/hypark5540/cloudcraft-mcp:0.1.7 --version
 
-curl -fsSL https://pypi.org/pypi/cloudcraft-mcp/0.1.6/json
-npm view @hypark5540/cloudcraft-mcp@0.1.6 version dist.integrity
+curl -fsSL https://pypi.org/pypi/cloudcraft-mcp/0.1.7/json
+npm view @hypark5540/cloudcraft-mcp@0.1.7 version dist.integrity
 ```
 
 GitHub Release checksum과 provenance, GHCR manifest의 source revision, MCP Registry의
@@ -162,6 +162,6 @@ job이 실패하면 원래 태그와 검증된 artifact를 그대로 사용해 �
 재시도합니다. 같은 버전에 다른 바이트를 업로드하거나 release asset을 덮어쓰지
 마세요.
 
-소스, 메타데이터, dependency 또는 workflow를 바꿔야 한다면 `v0.1.6` 태그를
+소스, 메타데이터, dependency 또는 workflow를 바꿔야 한다면 `v0.1.7` 태그를
 이동하지 말고 다음 patch 버전을 만듭니다. 이미 공개된 PyPI/npm 버전, 버전 OCI tag,
 MCP Registry 항목과 GitHub Release asset은 모두 immutable로 취급합니다.

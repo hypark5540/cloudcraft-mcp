@@ -1,14 +1,14 @@
 # MCP 클라이언트 연결 가이드
 
-Cloudcraft MCP `0.1.6`은 로컬 `stdio` 서버입니다. PyPI, npm, GHCR 배포본은
+Cloudcraft MCP `0.1.7`은 로컬 `stdio` 서버입니다. PyPI, npm, GHCR 배포본은
 동일한 Python 서버를 실행하며 네트워크 요청은 사용자가 지정한 Cloudcraft API로만
 보냅니다.
 
 | 배포 방식 | 고정된 식별자 | 로컬 요구 사항 |
 | --- | --- | --- |
-| PyPI / uvx | `cloudcraft-mcp==0.1.6` | Python을 자동 관리하는 `uv` |
-| npm / npx | `@hypark5540/cloudcraft-mcp@0.1.6` | Node.js 22 이상과 `uv` |
-| OCI / Docker | `ghcr.io/hypark5540/cloudcraft-mcp:0.1.6` | Docker 또는 호환 OCI 런타임 |
+| PyPI / uvx | `cloudcraft-mcp==0.1.7` | Python을 자동 관리하는 `uv` |
+| npm / npx | `@hypark5540/cloudcraft-mcp@0.1.7` | Node.js 22 이상과 `uv` |
+| OCI / Docker | `ghcr.io/hypark5540/cloudcraft-mcp:0.1.7` | Docker 또는 호환 OCI 런타임 |
 | MCP Registry | `io.github.hypark5540/cloudcraft-mcp` | 선택한 패키지 런타임 |
 
 ## API 키 준비와 보안
@@ -44,9 +44,9 @@ API 키 없이도 버전 출력은 가능하므로 실제 비밀을 입력하기
 수 있습니다.
 
 ```bash
-uvx --from cloudcraft-mcp==0.1.6 cloudcraft-mcp --version
-npx -y @hypark5540/cloudcraft-mcp@0.1.6 --version
-docker run --rm ghcr.io/hypark5540/cloudcraft-mcp:0.1.6 --version
+uvx --from cloudcraft-mcp==0.1.7 cloudcraft-mcp --version
+npx -y @hypark5540/cloudcraft-mcp@0.1.7 --version
+docker run --rm ghcr.io/hypark5540/cloudcraft-mcp:0.1.7 --version
 ```
 
 npm 패키지는 검증된 Python wheel을 포함한 실행기이며 `uv`를 하위 프로세스로
@@ -63,7 +63,7 @@ npm 패키지는 검증된 Python wheel을 포함한 실행기이며 `uv`를 하
   "mcpServers": {
     "cloudcraft": {
       "command": "uv",
-      "args": ["tool", "run", "--isolated", "--from", "cloudcraft-mcp==0.1.6", "cloudcraft-mcp"],
+      "args": ["tool", "run", "--isolated", "--from", "cloudcraft-mcp==0.1.7", "cloudcraft-mcp"],
       "env": {
         "CLOUDCRAFT_API_KEY": "${env:CLOUDCRAFT_API_KEY}",
         "CLOUDCRAFT_LOG_LEVEL": "WARNING",
@@ -80,7 +80,7 @@ Cursor를 시작하는 환경 또는 Cursor의 secret 관리 기능에 API 키�
 
 ## Claude Desktop
 
-GitHub Release의 `cloudcraft-mcp-0.1.6.mcpb`를 지원되는 Claude Desktop에 설치하면
+GitHub Release의 `cloudcraft-mcp-0.1.7.mcpb`를 지원되는 Claude Desktop에 설치하면
 설정 화면에서 API 키를 secret 값으로 입력할 수 있습니다. 함께 게시된 SHA-256 파일과
 provenance가 있다면 설치 전에 검증하세요.
 
@@ -94,12 +94,12 @@ MCPB를 지원하지 않는 버전에서는 Claude Desktop 설정의 `mcpServers
 저장소의 `gemini-extension.json`은 API 키를 `sensitive` 설정으로 선언합니다.
 
 ```bash
-gemini extensions install https://github.com/hypark5540/cloudcraft-mcp --ref=v0.1.6
+gemini extensions install https://github.com/hypark5540/cloudcraft-mcp --ref=v0.1.7
 gemini extensions config cloudcraft-mcp
 ```
 
 설치 검토 화면을 확인한 뒤 Cloudcraft API 키를 입력합니다. 확장은 고정된
-`@hypark5540/cloudcraft-mcp@0.1.6` npm 패키지를 stdio로 실행합니다.
+`@hypark5540/cloudcraft-mcp@0.1.7` npm 패키지를 stdio로 실행합니다.
 
 ## Codex와 ChatGPT Desktop
 
@@ -109,7 +109,7 @@ Codex CLI/IDE의 `~/.codex/config.toml`에는 값이 아니라 전달할 환경�
 ```toml
 [mcp_servers.cloudcraft]
 command = "uv"
-args = ["tool", "run", "--isolated", "--from", "cloudcraft-mcp==0.1.6", "cloudcraft-mcp"]
+args = ["tool", "run", "--isolated", "--from", "cloudcraft-mcp==0.1.7", "cloudcraft-mcp"]
 env_vars = ["CLOUDCRAFT_API_KEY"]
 
 [mcp_servers.cloudcraft.env]
@@ -127,7 +127,7 @@ Codex 또는 로컬 MCP를 지원하는 ChatGPT Desktop을 시작한 프로세�
 Claude Code가 API 키를 상속하는 환경에서 다음처럼 사용자 범위 서버를 등록합니다.
 
 ```bash
-claude mcp add --scope user cloudcraft -- uv tool run --isolated --from cloudcraft-mcp==0.1.6 cloudcraft-mcp
+claude mcp add --scope user cloudcraft -- uv tool run --isolated --from cloudcraft-mcp==0.1.7 cloudcraft-mcp
 claude mcp get cloudcraft
 ```
 
@@ -148,7 +148,7 @@ docker run --rm -i \
   --cap-drop=ALL \
   --security-opt=no-new-privileges \
   -e CLOUDCRAFT_API_KEY \
-  ghcr.io/hypark5540/cloudcraft-mcp:0.1.6
+  ghcr.io/hypark5540/cloudcraft-mcp:0.1.7
 ```
 
 내보낸 파일을 유지해야 할 때만 전용 호스트 디렉터리를 컨테이너에 마운트하고

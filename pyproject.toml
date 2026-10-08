@@ -1,10 +1,10 @@
 [build-system]
-requires = ["hatchling==1.31.0"]
+requires = ["hatchling==1.32.4"]
 build-backend = "hatchling.build"
 
 [project]
 name = "cloudcraft-mcp"
-version = "0.1.6"
+version = "0.1.7"
 description = "Model Context Protocol (MCP) server for Cloudcraft.co — list, read, export, create, update, and delete cloud architecture blueprints from Claude Desktop and other MCP clients."
 readme = "README.md"
 license = { text = "MIT" }
@@ -75,8 +75,14 @@ Repository = "https://github.com/hypark5540/cloudcraft-mcp"
 Issues = "https://github.com/hypark5540/cloudcraft-mcp/issues"
 "Cloudcraft API" = "https://developers.cloudcraft.co/"
 
+# hatchling >= 1.32 defaults to core metadata 2.5, which PyPI does not reliably
+# accept yet (pypi/warehouse#19083). Keep emitting 2.4 until that lands.
 [tool.hatch.build.targets.wheel]
 packages = ["src/cloudcraft_mcp"]
+core-metadata-version = "2.4"
+
+[tool.hatch.build.targets.sdist]
+core-metadata-version = "2.4"
 
 [tool.ruff]
 line-length = 100

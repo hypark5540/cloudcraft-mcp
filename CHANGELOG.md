@@ -4,7 +4,7 @@ All notable changes to this project are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.1.7] - 2026-10-08
 
 ### Fixed
 - Gzip-compressed Cloudcraft responses no longer fail with a synthetic
@@ -43,6 +43,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Changed
 - Dependabot no longer proposes `mcp` major-version bumps; the move to the mcp
   2.x API is a deliberate migration.
+- Build with hatchling 1.32.4 while pinning `core-metadata-version` to 2.4
+  (PyPI does not reliably accept 2.5 yet); CI validates artifacts with
+  twine 7.0.0.
 
 ## [0.1.6] - 2026-07-23
 

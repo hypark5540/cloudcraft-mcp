@@ -140,7 +140,7 @@ jobs:
         run: |
           mkdir -p dist "$RUNNER_TEMP/npm-package"
           uv build --wheel --sdist --no-sources --out-dir dist
-          uvx --from twine==6.2.0 twine check dist/*
+          uvx --from twine==7.0.0 twine check dist/*
           npm pack --pack-destination "$RUNNER_TEMP/npm-package"
       - name: Validate MCP Registry and MCPB metadata
         run: |

@@ -3,7 +3,7 @@
   "manifest_version": "0.4",
   "name": "cloudcraft-mcp",
   "display_name": "Cloudcraft MCP",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Unofficial Cloudcraft architecture blueprint access through MCP",
   "long_description": "List, inspect, create, update, delete, and export Cloudcraft architecture blueprints through a local Model Context Protocol server. The API key stays in the extension host's sensitive configuration and is sent only to the configured Cloudcraft API endpoint.",
   "author": {

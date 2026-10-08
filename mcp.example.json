@@ -2,7 +2,7 @@
   "mcpServers": {
     "cloudcraft": {
       "command": "uvx",
-      "args": ["cloudcraft-mcp==0.1.6"],
+      "args": ["cloudcraft-mcp==0.1.7"],
       "env": {
         "CLOUDCRAFT_API_KEY": "replace-with-your-cloudcraft-api-key",
         "CLOUDCRAFT_BASE_URL": "https://api.cloudcraft.co",
