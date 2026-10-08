@@ -516,6 +516,25 @@ jobs:
             exit 1
           fi
       - if: steps.registry-status.outputs.status == 'missing'
+        name: Wait for npm and PyPI to expose the version
+        # npm processes a publish asynchronously ("may take a few minutes to
+        # become available") and the MCP Registry rejects a server whose
+        # packages it cannot resolve yet (0.1.7 failed exactly this way).
+        run: |
+          VERSION="$(node -p "require('./server.json').version")"
+          NPM_PACKAGE="$(node -p "require('./server.json').packages.find((p) => p.registryType === 'npm').identifier")"
+          PYPI_PACKAGE="$(node -p "require('./server.json').packages.find((p) => p.registryType === 'pypi').identifier")"
+          for _ in $(seq 1 20); do
+            if npm view "$NPM_PACKAGE@$VERSION" version >/dev/null 2>&1 \
+              && curl --fail --silent --output /dev/null "https://pypi.org/pypi/$PYPI_PACKAGE/$VERSION/json"; then
+              echo "npm and PyPI expose $VERSION."
+              exit 0
+            fi
+            sleep 30
+          done
+          echo "npm or PyPI has not exposed $VERSION after 10 minutes; re-run this job." >&2
+          exit 1
+      - if: steps.registry-status.outputs.status == 'missing'
         name: Install verified MCP publisher
         run: |
           PUBLISHER_VERSION=1.8.0
