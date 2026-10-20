@@ -4,6 +4,15 @@ All notable changes to this project are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Security
+- Raised the `mcp` runtime floor to 1.30.0 so the locked SDK no longer carries
+  CVE-2026-59951 (unbounded session accumulation in the StreamableHTTP
+  transport, GHSA-84m7-p3x7-pcfv). This server only speaks stdio, so the
+  vulnerable path was never reachable, but the pinned 1.28.1 failed
+  `pip-audit` in CI and raised Dependabot alert #38.
+
 ## [0.1.7] - 2026-10-08
 
 ### Fixed
